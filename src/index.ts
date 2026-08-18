@@ -35,6 +35,27 @@ export interface Config {
   readonly allowInstall?: boolean
 }
 
+/**
+ * 装成功后给集市记一次热度。
+ *
+ * 🔴 <b>刻意不 await</b>：皮肤此刻已经装好了，回报是纯统计。集市慢或者挂了，
+ * 不该让「已装好」这个结论等它，更不该因此把成功报成失败。
+ *
+ * 没有这一下的话，集市上的装机量只统计得到「在网页上点了复制安装命令」的人，
+ * 从本插件一键装的全都不计入，排序会失真。
+ *
+ * @param ctx - 插件上下文，只用来打日志。
+ * @param catalog - 目录服务。
+ * @param skinId - 集市条目 id，由 spec 在目录里反查得到，不取客户端传入值。
+ */
+function reportInstalled(ctx: Context, catalog: Catalog, skinId: string): void {
+  void catalog.reportInstall(skinId).then((recorded) => {
+    if (!recorded) {
+      ctx.logger.debug('[skin-market] 装机量回报没记上（skinId=%s），不影响安装结果', skinId)
+    }
+  })
+}
+
 /** JSON 响应。 */
 function json(res: ServerResponse, status: number, body: unknown): void {
   const payload = JSON.stringify(body)
@@ -235,13 +256,15 @@ export function apply(ctx: Context, config: Config = {}): void {
         const spec = typeof body.spec === 'string' ? body.spec : ''
         if (spec === '') throw new InstallFailure('SPEC_NOT_IN_CATALOG', '缺少安装 spec')
         // 只装集市收录过的东西：用户手输任意包名不放行。
-        if (!await catalog.allows(spec)) {
+        const entry = await catalog.findBySpec(spec)
+        if (entry === undefined) {
           throw new InstallFailure(
             'SPEC_NOT_IN_CATALOG',
             `${spec} 不在集市目录里，市场不代装未收录的包`,
           )
         }
         await install(dir, spec, emit)
+        reportInstalled(ctx, catalog, entry.skinId)
       }),
     },
     {
@@ -257,7 +280,8 @@ export function apply(ctx: Context, config: Config = {}): void {
       handler: writeRoute(ctx, config, profileDir, async (dir, body, emit) => {
         const spec = typeof body.spec === 'string' ? body.spec : ''
         if (spec === '') throw new InstallFailure('SPEC_NOT_IN_CATALOG', '缺少 spec')
-        if (!await catalog.allows(spec)) {
+        const entry = await catalog.findBySpec(spec)
+        if (entry === undefined) {
           throw new InstallFailure('SPEC_NOT_IN_CATALOG', `${spec} 不在集市目录里`)
         }
         // 真实包名要装完才知道，而授权必须发生在装之前 —— 用 spec 的裸名授权，
@@ -266,6 +290,7 @@ export function apply(ctx: Context, config: Config = {}): void {
         await allowBuilds(dir, bare)
         emit({ type: 'log', line: `✓ 已授权 ${bare} 运行构建脚本，正在重试安装` })
         await install(dir, spec, emit)
+        reportInstalled(ctx, catalog, entry.skinId)
       }),
     },
   ]

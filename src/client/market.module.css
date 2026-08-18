@@ -391,9 +391,19 @@
 
 .appearanceTitle {
   margin: 0;
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
   font-size: 13px;
   font-weight: 500;
   color: var(--dsw-alias-label-primary);
+}
+
+.appearanceCount {
+  font-size: 12px;
+  font-weight: 400;
+  color: var(--dsw-alias-label-caption);
+  font-variant-numeric: tabular-nums;
 }
 
 .cubes {
@@ -401,6 +411,27 @@
   display: flex;
   flex-wrap: wrap;
   gap: 8px;
+  /* 一个包可以注册几十个主题（中国传统色那种成对的 light/dark）。不限高的话
+     外观区块会把整页撑爆，下面的已安装列表滚到底也看不见。 */
+  max-height: 152px;
+  overflow-y: auto;
+  padding-right: 4px;
+  scrollbar-width: thin;
+  scrollbar-color: var(--dsw-alias-scrollbar-bg-l2) transparent;
+}
+
+.cubes::-webkit-scrollbar { width: 8px; }
+
+.cubes::-webkit-scrollbar-thumb {
+  background: var(--dsw-alias-scrollbar-bg-l2);
+  border-radius: 999px;
+  border: 2px solid transparent;
+  background-clip: content-box;
+}
+
+.cubes::-webkit-scrollbar-thumb:hover {
+  background: var(--dsw-alias-scrollbar-hover-l2);
+  background-clip: content-box;
 }
 
 .cube {

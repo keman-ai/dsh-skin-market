@@ -36,10 +36,13 @@ declare module '@deepseek-ai/cordis' {
     tapIndex(transform: (html: string) => string): Disposer
   }
 
+  /** cordis 的 Logger 门面是 `Record<'error'|'info'|'warn'|'debug', LoggerMethod>`，这里按用到的列。 */
   export interface Logger {
     info(message: unknown, ...args: readonly unknown[]): void
     warn(message: unknown, ...args: readonly unknown[]): void
     error(message: unknown, ...args: readonly unknown[]): void
+    /** 用户无需为之做任何事的信息走这一档，别拿 warn 污染正常日志。 */
+    debug(message: unknown, ...args: readonly unknown[]): void
   }
 
   /** 插件 apply 收到的上下文（本插件用到的成员）。 */

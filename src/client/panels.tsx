@@ -39,7 +39,10 @@ function labelOf(id: string, t: Translate): string {
 export function AppearancePicker({ options, t, onSelect }: AppearancePickerProps): JSX.Element {
   return (
     <section className={styles.appearance}>
-      <h3 className={styles.appearanceTitle}>{t('appearance.title')}</h3>
+      <h3 className={styles.appearanceTitle}>
+        {t('appearance.title')}
+        <span className={styles.appearanceCount}>{options.length}</span>
+      </h3>
       <div className={styles.cubes}>
         {options.map(option => (
           <button

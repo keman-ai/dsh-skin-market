@@ -234,17 +234,61 @@ export class Catalog {
     }
   }
 
-  /** 目录里有没有这个安装 spec —— 安装前的白名单校验，不放行任意包名。 */
-  async allows(spec: string): Promise<boolean> {
-    const seen = new Set<string>()
+  /**
+   * 目录里这个安装 spec 对应的条目。
+   *
+   * 既是安装前的白名单校验（不放行任意包名），也顺手把条目本身交出来 ——
+   * 装完要用它的 skinId 回报热度，这样就不必让客户端多传一个可以随便捏造的 id。
+   *
+   * @param spec - 待校验的安装 spec。
+   * @returns 命中的条目；目录里没有时 undefined。
+   */
+  async findBySpec(spec: string): Promise<SkinEntry | undefined> {
+    let scanned = 0
     for (let page = 1; page <= 10; page += 1) {
       const result = await this.page({ page, size: MAX_PAGE_SIZE })
       for (const item of result.items) {
-        if (item.installSpec !== undefined) seen.add(item.installSpec)
+        if (item.installSpec === spec) return item
       }
-      if (result.items.length === 0 || seen.size >= result.total) break
+      // 用「扫过的条目数」而不是「收集到的 spec 数」判断翻到头：没有 installSpec 的条目
+      // （元数据不全、装不了的那些）也占 total 的名额，拿去重后的 spec 数比会永远差一截，
+      // 于是白白把 10 页翻满。
+      scanned += result.items.length
+      if (result.items.length === 0 || scanned >= result.total) break
     }
-    return seen.has(spec)
+    return undefined
+  }
+
+  /** 目录里有没有这个安装 spec —— 安装前的白名单校验，不放行任意包名。 */
+  async allows(spec: string): Promise<boolean> {
+    return await this.findBySpec(spec) !== undefined
+  }
+
+  /**
+   * 安装成功后给集市记一次热度。
+   *
+   * 🔴 <b>绝不影响安装结果</b>：集市挂了、超时、返回业务错误，一律咽下去。
+   * 用户的皮肤已经装好了，为一个统计埋点把成功报成失败是本末倒置 ——
+   * 所以调用方也应当不 await 它。
+   *
+   * @param skinId - 集市条目 id。
+   * @returns 是否真的记上了，供测试与诊断判断。
+   */
+  async reportInstall(skinId: string): Promise<boolean> {
+    const url = `${this.origin}/api/v1/public/skins/${encodeURIComponent(skinId)}/install-hit`
+    try {
+      const response = await fetch(url, {
+        method: 'POST',
+        headers: { accept: 'application/json' },
+        signal: AbortSignal.timeout(REPORT_TIMEOUT_MS),
+      })
+      if (!response.ok) return false
+      // 同 fetchPage：findu 的信封业务失败也回 200，只看状态码会把失败当成功。
+      const envelope = await response.json() as ApiEnvelope<unknown>
+      return envelope.code === undefined || envelope.code === 'OK'
+    } catch {
+      return false
+    }
   }
 
   private async fetchPage(
