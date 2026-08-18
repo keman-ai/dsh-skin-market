@@ -11,6 +11,11 @@
     "market"
   ],
   "license": "MIT",
+  "author": "Science Roam Limited",
+  "homepage": "https://github.com/keman-ai/dsh-skin-market#readme",
+  "bugs": {
+    "url": "https://github.com/keman-ai/dsh-skin-market/issues"
+  },
   "repository": {
     "type": "git",
     "url": "git+https://github.com/keman-ai/dsh-skin-market.git"

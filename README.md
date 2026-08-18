@@ -124,4 +124,6 @@ pnpm test      # 单元测试
 
 [dsh.a2hmarket.ai](https://dsh.a2hmarket.ai) —— 皮肤目录站，作者在这里上架。
 
-MIT
+## 许可
+
+[MIT](LICENSE) © 2026 Science Roam Limited
