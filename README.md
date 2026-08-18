@@ -58,7 +58,7 @@ dsh plugin --profile web remove dsh-skin-market
 | **pnpm** | 在 `PATH` 上（实测 8.15 与 10） | 只影响安装。诊断页标红，安装按钮明确报错，浏览和搜索照常 |
 | **git** | 在 `PATH` 上 | 目录里多数皮肤是 `github:owner/repo` 源，pnpm 靠 git 拉 |
 | **网络** | `dsh.a2hmarket.ai`；装 GitHub 源皮肤还要 `github.com` | 集市连不上会回落到缓存 / 随包快照并在页面说明 |
-| **浏览器** | 装皮肤要求**本机直连**（loopback） | 远程访问时能逛能搜，安装被拒（见安全边界）|
+| **浏览器** | 装皮肤要求**本机直连**（loopback） | 远程访问时能逛能搜，安装被拒 |
 
 插件自身只有一个运行时依赖：[`yaml`](https://www.npmjs.com/package/yaml)，用来读写 profile 的 patch 文件。
 
