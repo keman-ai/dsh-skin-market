@@ -65,19 +65,38 @@ async function loadPatch(profileDir: string): Promise<{ file: string; doc: Docum
   if (!(doc.contents instanceof YAMLSeq)) {
     throw new Error(`${file} 不是 patch 条目数组，为避免覆盖你的配置，市场不动它`)
   }
+  // 从 '[]' 解析出来的序列是 flow 风格，往里加行会写成挤作一行的 `[ {...} ]`。
+  // 这是用户要读要改的配置文件，新建时也得是正常的块状 YAML。
+  if (text === '') doc.contents.flow = false
   return { file, doc }
 }
 
-/** 顶层条目上的归属标记（我们写进去的那条注释）。 */
+/**
+ * 顶层条目上的归属标记（我们写进去的那条注释）。
+ * 标记后面可能跟着补充说明，所以只取第一个词。
+ */
 function ownerOf(item: unknown): string | undefined {
   const comment = (item as { commentBefore?: string | null } | null)?.commentBefore
   if (typeof comment !== 'string') return undefined
   for (const line of comment.split('\n')) {
     const at = line.indexOf(OWNER_TAG)
-    if (at >= 0) return line.slice(at + OWNER_TAG.length).trim()
+    if (at < 0) continue
+    const owner = line.slice(at + OWNER_TAG.length).trim().split(/\s+/)[0]
+    if (owner !== undefined && owner !== '') return owner
   }
   return undefined
 }
+
+/**
+ * 修正后那一行的 id：由我们命名，不沿用作者那个从没生效过的 id。
+ * 用完整包名保证唯一（两个 scope 下的同名包不会撞），同包多行时追加序号。
+ * @param packageName - 提供这行的包。
+ * @param ordinal - 该包第几个被修正的行，从 0 起。
+ * @returns 统一格式的行 id。
+ */
+const repairedIdOf = (packageName: string, ordinal: number): string => (
+  ordinal === 0 ? `skin:${packageName}` : `skin:${packageName}#${ordinal + 1}`
+)
 
 /**
  * 读一个已安装包声明的 bundle patch 文件。
@@ -194,11 +213,12 @@ export async function applyBundlePatch(
   for (const row of rows) {
     // 经 JSON 往返落到本文档上：跨文档直接塞节点会带着原文档的锚点与格式状态。
     const plain = JSON.parse(JSON.stringify(row)) as Record<string, unknown>
-    const fixed = repairSelfMount(plain, packageName)
+    const fixed = repairSelfMount(plain, packageName, repaired)
+    const note = fixed === plain ? '' : ` （已修正，原 id: ${String(plain.id)}）`
     if (fixed !== plain) repaired += 1
 
     const node = doc.createNode(fixed) as { commentBefore?: string | null }
-    node.commentBefore = ` ${tagOf(packageName)}`
+    node.commentBefore = ` ${tagOf(packageName)}${note}`
     seq.add(node)
   }
 
@@ -216,16 +236,21 @@ export async function applyBundlePatch(
  *
  * 判据收得很紧，只认「它显然是想挂载自己」这一种：没有 insert、有 id、且 name
  * 正是这个包自己。真正的覆盖型 patch（name 指向别的包，或压根不写 name）不受影响。
+ *
+ * 修正时顺手把行 id 换成我们统一命名的那个：作者原来的 id 从没在树里生效过，
+ * 也就不可能有别的行按它引用，换掉是安全的，换来的是 profile 里一眼能认出
+ * 哪些行是市场装的。作者写对的行则连 id 都不碰 —— 同包多行之间可能靠 id 互相引用。
  * @param row - bundle patch 里的一行。
  * @param packageName - 提供这行的包。
- * @returns 需要修正时返回包装后的行，否则原样返回入参。
+ * @param ordinal - 该包此前已修正过几行。
+ * @returns 需要修正时返回改名并包装后的行，否则原样返回入参。
  */
 function repairSelfMount(
-  row: Record<string, unknown>, packageName: string,
+  row: Record<string, unknown>, packageName: string, ordinal: number,
 ): Record<string, unknown> {
   if (row.insert !== undefined) return row
   if (typeof row.id !== 'string' || row.name !== packageName) return row
-  return { insert: [row] }
+  return { insert: [{ ...row, id: repairedIdOf(packageName, ordinal) }] }
 }
 
 /**

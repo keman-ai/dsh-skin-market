@@ -174,7 +174,72 @@ test('把"挂载自己"写成"改一行"的笔误会被接住 —— 否则装�
   const applied = await applyBundlePatch(dir, '@dsh-external/dsh-qq2006')
   assert.equal(applied.rows, 1)
   assert.equal(applied.repaired, 1)
-  assert.match(await patchOf(dir), /insert:/)
+
+  const text = await patchOf(dir)
+  assert.match(text, /insert:/)
+  // 修正的行由我们统一命名，作者那个从没生效过的 id 不留在配置里，
+  // 但记进注释以便追溯。
+  assert.match(text, /id: skin:@dsh-external\/dsh-qq2006/)
+  assert.doesNotMatch(text, /^\s*- id: ui-skin-qq2006/m)
+  assert.match(text, /已修正，原 id: ui-skin-qq2006/)
+})
+
+test('新建的 patch 文件是块状 YAML，不是挤成一行的 flow 风格', async () => {
+  const dir = await makeProfile()
+  await fakePackage(dir, '@dsh-external/dsh-qq2006', QQ_PATCH)
+  await applyBundlePatch(dir, '@dsh-external/dsh-qq2006')
+
+  const text = await patchOf(dir)
+  assert.doesNotMatch(text, /^\[/)
+  assert.match(text, /^- insert:$/m)
+})
+
+test('写进去的行能原样读回来 —— id 里的冒号不会把 YAML 解析带偏', async () => {
+  const dir = await makeProfile()
+  await fakePackage(dir, '@dsh-external/dsh-qq2006', QQ_PATCH)
+  await applyBundlePatch(dir, '@dsh-external/dsh-qq2006')
+
+  const { parse } = await import('yaml')
+  const parsed = parse(await patchOf(dir)) as { insert: { id: string; name: string }[] }[]
+  assert.equal(parsed[0]?.insert[0]?.id, 'skin:@dsh-external/dsh-qq2006')
+  assert.equal(parsed[0]?.insert[0]?.name, '@dsh-external/dsh-qq2006')
+})
+
+test('同一个包修正多行时 id 不撞', async () => {
+  const dir = await makeProfile()
+  await fakePackage(dir, 'dsh-multi', [
+    '- id: row-a',
+    "  name: 'dsh-multi'",
+    '- id: row-b',
+    "  name: 'dsh-multi'",
+    '',
+  ].join('\n'))
+
+  const applied = await applyBundlePatch(dir, 'dsh-multi')
+  assert.equal(applied.repaired, 2)
+  const text = await patchOf(dir)
+  assert.match(text, /id: skin:dsh-multi$/m)
+  assert.match(text, /id: skin:dsh-multi#2/)
+})
+
+test('作者写对的行连 id 都不碰 —— 同包多行可能靠 id 互相引用', async () => {
+  const dir = await makeProfile()
+  await fakePackage(dir, 'dsh-linked', [
+    '- insert:',
+    '    - id: author-row',
+    '      name: dsh-linked',
+    '- id: author-row',
+    '  config:',
+    '    tone: warm',
+    '',
+  ].join('\n'))
+
+  const applied = await applyBundlePatch(dir, 'dsh-linked')
+  assert.equal(applied.repaired, 0)
+  const text = await patchOf(dir)
+  // 两行都得保持 author-row，否则后一行的覆盖就落空了。
+  assert.equal(text.match(/author-row/g)?.length, 2)
+  assert.doesNotMatch(text, /skin:dsh-linked/)
 })
 
 test('真正的覆盖型 patch 不碰 —— 判据是 name 必须正是这个包自己', async () => {
