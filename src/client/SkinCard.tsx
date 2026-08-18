@@ -20,12 +20,13 @@ export interface SkinCardProps {
   readonly onDismiss: (entry: SkinEntry) => void
 }
 
-/** 从安装 spec 推包名，与 host 半保持同一套规则。 */
-export function packageNameOf(entry: SkinEntry): string {
-  const spec = entry.installSpec ?? ''
-  if (spec === '') return entry.slug
-  if (!spec.startsWith('github:')) return spec
-  return spec.replace(/^github:/, '').split('/').pop()?.split('#')[0] ?? entry.slug
+/**
+ * 卡片状态的键。用安装 spec 而不是包名：真实包名要装完才知道
+ * （`github:LaplaceYoung/dsh-qq2006` 装出来叫 `@dsh-external/dsh-qq2006`），
+ * 猜出来的名字既对不上已装列表，也没法用来卸载。
+ */
+export function cardKeyOf(entry: SkinEntry): string {
+  return entry.installSpec ?? entry.skinId
 }
 
 /** 主按钮：一个按钮走完 安装 → 安装中 → 刷新生效 / 已装 → 卸载。 */

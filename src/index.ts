@@ -233,9 +233,6 @@ export function apply(ctx: Context, config: Config = {}): void {
       path: `${API_PREFIX}/install`,
       handler: writeRoute(ctx, config, profileDir, async (dir, body, emit) => {
         const spec = typeof body.spec === 'string' ? body.spec : ''
-        const packageName = typeof body.packageName === 'string' && body.packageName !== ''
-          ? body.packageName
-          : spec.replace(/^github:/, '').split('/').pop()?.split('#')[0] ?? spec
         if (spec === '') throw new InstallFailure('SPEC_NOT_IN_CATALOG', '缺少安装 spec')
         // 只装集市收录过的东西：用户手输任意包名不放行。
         if (!await catalog.allows(spec)) {
@@ -244,7 +241,7 @@ export function apply(ctx: Context, config: Config = {}): void {
             `${spec} 不在集市目录里，市场不代装未收录的包`,
           )
         }
-        await install(dir, spec, packageName, emit)
+        await install(dir, spec, emit)
       }),
     },
     {
@@ -258,15 +255,17 @@ export function apply(ctx: Context, config: Config = {}): void {
     {
       path: `${API_PREFIX}/allow-builds`,
       handler: writeRoute(ctx, config, profileDir, async (dir, body, emit) => {
-        const packageName = typeof body.packageName === 'string' ? body.packageName : ''
         const spec = typeof body.spec === 'string' ? body.spec : ''
-        if (packageName === '' || spec === '') throw new InstallFailure('SPEC_NOT_IN_CATALOG', '缺少包名或 spec')
+        if (spec === '') throw new InstallFailure('SPEC_NOT_IN_CATALOG', '缺少 spec')
         if (!await catalog.allows(spec)) {
           throw new InstallFailure('SPEC_NOT_IN_CATALOG', `${spec} 不在集市目录里`)
         }
-        await allowBuilds(dir, packageName)
-        emit({ type: 'log', line: `✓ 已授权 ${packageName} 运行构建脚本，正在重试安装` })
-        await install(dir, spec, packageName, emit)
+        // 真实包名要装完才知道，而授权必须发生在装之前 —— 用 spec 的裸名授权，
+        // pnpm 的 allowBuilds 按依赖名匹配，git 源的裸名与之一致。
+        const bare = spec.replace(/^github:/, '').split('/').pop()?.split('#')[0] ?? spec
+        await allowBuilds(dir, bare)
+        emit({ type: 'log', line: `✓ 已授权 ${bare} 运行构建脚本，正在重试安装` })
+        await install(dir, spec, emit)
       }),
     },
   ]

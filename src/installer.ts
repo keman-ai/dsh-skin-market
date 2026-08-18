@@ -7,7 +7,7 @@
 import { spawn } from 'node:child_process'
 import { readFile } from 'node:fs/promises'
 import { join } from 'node:path'
-import { addRow, isWritable, listInstalled, removeRow } from './profile.ts'
+import { applyBundlePatch, isWritable, listInstalled, readDependencies, removeRow } from './profile.ts'
 import type { InstallEvent, InstallErrorCode } from './types.ts'
 
 /** 单次 pnpm 调用的上限。装一个皮肤包不该超过这个数，卡住就报错而不是永远转圈。 */
@@ -25,6 +25,15 @@ const ROOT_FLAG = '--ignore-workspace-root-check'
  * 界面只有一行 DeprecationWarning，看着像卡死。append-only 会逐行打进度。
  */
 const REPORTER_FLAG = '--reporter=append-only'
+
+/**
+ * `pnpm add` 的参数。ROOT_FLAG 只有 add 认识 —— remove 带上它会以
+ * "Unknown option" 直接失败，卸载功能就废了。
+ */
+const ADD_FLAGS = [ROOT_FLAG, REPORTER_FLAG]
+
+/** `pnpm remove` 的参数。 */
+const REMOVE_FLAGS = [REPORTER_FLAG]
 
 /** 诊断与错误信息里回带的最近一次输出。 */
 let lastLog = ''
@@ -124,14 +133,15 @@ const blockedBuild = (output: string): boolean => (
  * @throws InstallFailure 任一阶段失败。
  */
 export async function install(
-  profileDir: string, spec: string, packageName: string, emit: Emit,
-): Promise<void> {
+  profileDir: string, spec: string, emit: Emit,
+): Promise<string> {
   if (!await isWritable(profileDir)) {
     throw new InstallFailure('PROFILE_UNRESOLVED', `profile 目录不可写：${profileDir}`)
   }
   const installed = await listInstalled(profileDir)
-  if (installed.some(row => row.packageName === packageName)) {
-    throw new InstallFailure('ALREADY_INSTALLED', `${packageName} 已经装过了`)
+  // 按 spec 判重，不按包名 —— 包名要装完才知道（见下）。
+  if (installed.some(row => row.spec === spec)) {
+    throw new InstallFailure('ALREADY_INSTALLED', `${spec} 已经装过了`)
   }
   if (await pnpmVersion(profileDir) === undefined) {
     throw new InstallFailure(
@@ -141,55 +151,78 @@ export async function install(
     )
   }
 
+  const before = new Set(Object.keys(await readDependencies(profileDir)))
+
   emit({ type: 'step', step: 'resolve' })
   emit({ type: 'log', line: `$ pnpm add ${spec}  (cwd: ${profileDir})` })
   emit({ type: 'step', step: 'download' })
-  const added = await run('pnpm', ['add', ROOT_FLAG, REPORTER_FLAG, spec], profileDir, emit)
+  const added = await run('pnpm', ['add', ...ADD_FLAGS, spec], profileDir, emit)
+  lastLog = added.output
 
   if (!added.ok) {
-    lastLog = added.output
-    if (blockedBuild(added.output)) {
-      throw new InstallFailure(
-        'BUILD_SCRIPT_BLOCKED',
-        `${packageName} 需要在安装时运行构建脚本，pnpm 默认拒绝了。`,
-        '同意即表示允许该包的代码在你的机器上执行，且不在 agent 沙箱内。'
-        + `确认后我们会把 allowBuilds: { ${packageName}: true } 写进 profile 的 pnpm-workspace.yaml 并重试。`,
-      )
-    }
+    if (blockedBuild(added.output)) throw buildBlocked(spec)
     throw new InstallFailure('PNPM_FAILED', `pnpm add ${spec} 失败`, tailOf(added.output))
   }
+
+  /*
+   * 真实包名只能从安装结果里读，不能从 spec 猜：`github:LaplaceYoung/dsh-qq2006`
+   * 装出来的包名是 `@dsh-external/dsh-qq2006`。猜错的后果是往 patch 里写一个解析不到
+   * 的模块名 —— pnpm 报成功，皮肤却静默地不生效。
+   */
+  const after = await readDependencies(profileDir)
+  const packageName = Object.keys(after).find(name => !before.has(name))
+  if (packageName === undefined) {
+    throw new InstallFailure(
+      'PNPM_FAILED',
+      'pnpm 报告成功，但 profile 的依赖没有变化，无法确定装上的包名',
+      tailOf(added.output),
+    )
+  }
+  emit({ type: 'log', line: `✓ 已安装 ${packageName}` })
 
   // 构建脚本被跳过时 pnpm 仍返回 0，但 git 源的包会缺构建产物 —— 装了也加载不了，
   // 所以这里当失败处理并回滚，而不是让用户刷新后看见一个坏掉的 dsh。
   if (blockedBuild(added.output)) {
-    lastLog = added.output
-    await run('pnpm', ['remove', ROOT_FLAG, REPORTER_FLAG, packageName], profileDir)
-    throw new InstallFailure(
-      'BUILD_SCRIPT_BLOCKED',
-      `${packageName} 的构建脚本被 pnpm 拦下了，装上去也缺构建产物。`,
-      '同意即表示允许该包的代码在你的机器上执行，且不在 agent 沙箱内。',
-    )
+    await run('pnpm', ['remove', ...REMOVE_FLAGS, packageName], profileDir)
+    throw buildBlocked(packageName)
   }
 
   emit({ type: 'step', step: 'patch' })
   try {
-    await addRow(profileDir, packageName)
+    const applied = await applyBundlePatch(profileDir, packageName)
+    emit({ type: 'log', line: `✓ 已把 ${packageName} 声明的 ${applied.rows} 行 patch 内联进 profile` })
+    if (applied.repaired > 0) {
+      // 明确说出来：我们改动了作者写的东西，用户有权知道。
+      emit({
+        type: 'log',
+        line: `⚠ 其中 ${applied.repaired} 行写成了「改一个不存在的行」，已按「挂载自己」修正 —— `
+          + '否则这个皮肤装了也不会生效（用官方命令装同样如此，建议向作者反馈）',
+      })
+    }
   } catch (error) {
-    // 写行失败就把包卸回去：宁可什么都没发生，也不要留下装了却没挂载的半吊子状态。
-    await run('pnpm', ['remove', ROOT_FLAG, REPORTER_FLAG, packageName], profileDir)
-    lastLog = added.output
+    // 挂不上就把包卸回去：宁可什么都没发生，也不要留下装了却没挂载的半吊子状态。
+    await run('pnpm', ['remove', ...REMOVE_FLAGS, packageName], profileDir)
     throw new InstallFailure(
       'PATCH_WRITE_FAILED',
-      '写 profile 的 cordis.patch.yml 失败，已把包卸回去。',
+      `${packageName} 挂载失败，已把包卸回去。`,
       error instanceof Error ? error.message : String(error),
     )
   }
 
   emit({ type: 'step', step: 'compose' })
-  emit({ type: 'log', line: '✓ 已写入 profile 的 cordis.patch.yml' })
   emit({ type: 'log', line: '✓ Loader 树将在约 1 秒内热重组（未重启进程）' })
-  lastLog = added.output
   emit({ type: 'done', packageName, needsReload: true })
+  return packageName
+}
+
+/** 构建脚本被 pnpm 拦下的统一说法：这一条必须让用户明确点头，不能替他决定。 */
+function buildBlocked(target: string): InstallFailure {
+  return new InstallFailure(
+    'BUILD_SCRIPT_BLOCKED',
+    `${target} 需要在安装时运行构建脚本，pnpm 默认拒绝了。`,
+    '同意即表示允许该包的代码在你的机器上执行，且不在 agent 沙箱内。'
+    + '确认后我们会把 allowBuilds 写进 profile 的 pnpm-workspace.yaml 并重试。',
+  )
 }
 
 /**
@@ -211,7 +244,7 @@ export async function uninstall(profileDir: string, packageName: string, emit: E
 
   emit({ type: 'step', step: 'download' })
   emit({ type: 'log', line: `$ pnpm remove ${packageName}` })
-  const removed = await run('pnpm', ['remove', ROOT_FLAG, REPORTER_FLAG, packageName], profileDir, emit)
+  const removed = await run('pnpm', ['remove', ...REMOVE_FLAGS, packageName], profileDir, emit)
   lastLog = removed.output
   if (!removed.ok) {
     // patch 行已经摘了，皮肤实际已停止生效；依赖残留不影响使用，如实说明即可。

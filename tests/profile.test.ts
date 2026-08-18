@@ -2,37 +2,98 @@
 
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { mkdtemp, readFile, writeFile } from 'node:fs/promises'
+import { mkdir, mkdtemp, readFile, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { addRow, listInstalled, profileDirOf, removeRow, rowIdOf } from '../src/profile.ts'
+import { applyBundlePatch, listInstalled, profileDirOf, removeRow } from '../src/profile.ts'
 
-/** 一个空的临时 profile 目录。 */
+/** 一个临时 profile 目录。 */
 async function makeProfile(patch?: string): Promise<string> {
   const dir = await mkdtemp(join(tmpdir(), 'skin-market-'))
   if (patch !== undefined) await writeFile(join(dir, 'cordis.patch.yml'), patch, 'utf8')
   return dir
 }
 
+/**
+ * 在 profile 里造一个已安装的皮肤包。
+ * @param dir - profile 目录。
+ * @param name - 包名（可带 scope）。
+ * @param patch - 该包 cordis.patch.yml 的内容；省略表示没有 dsh.bundle 声明。
+ */
+async function fakePackage(dir: string, name: string, patch?: string): Promise<void> {
+  const packageDir = join(dir, 'node_modules', ...name.split('/'))
+  await mkdir(packageDir, { recursive: true })
+  const manifest: Record<string, unknown> = { name, version: '1.2.3' }
+  if (patch !== undefined) {
+    manifest.dsh = { bundle: { patch: './cordis.patch.yml' } }
+    await writeFile(join(packageDir, 'cordis.patch.yml'), patch, 'utf8')
+  }
+  await writeFile(join(packageDir, 'package.json'), JSON.stringify(manifest), 'utf8')
+}
+
 const patchOf = (dir: string): Promise<string> => readFile(join(dir, 'cordis.patch.yml'), 'utf8')
 
-test('patch 文件不存在时，第一次安装会建出来', async () => {
+/** 皮肤包真实的那种层：顶层行，不是 insert 包装。 */
+const QQ_PATCH = `# mount the QQ2006 skin
+- id: ui-skin-qq2006
+  name: '@dsh-external/dsh-qq2006'
+`
+
+test('原样内联包自己声明的层 —— id 与包名都取自作者，不是我们猜的', async () => {
   const dir = await makeProfile()
-  assert.equal(await addRow(dir, 'dsh-cool-skin'), true)
+  await fakePackage(dir, '@dsh-external/dsh-qq2006', QQ_PATCH)
+
+  assert.equal((await applyBundlePatch(dir, '@dsh-external/dsh-qq2006')).rows, 1)
   const text = await patchOf(dir)
-  assert.match(text, /id: skin:dsh-cool-skin/)
-  assert.match(text, /name: dsh-cool-skin/)
+  // 包名带 scope，行的 id 是作者定的 ui-skin-qq2006 —— 两者都不能是我们猜的。
+  assert.match(text, /id: ui-skin-qq2006/)
+  assert.match(text, /@dsh-external\/dsh-qq2006/)
 })
 
-test('重复安装是幂等的，不会写出第二行', async () => {
+test('作者用 insert 形状时也原样保持', async () => {
   const dir = await makeProfile()
-  await addRow(dir, 'dsh-cool-skin')
-  assert.equal(await addRow(dir, 'dsh-cool-skin'), false)
-  const rows = (await patchOf(dir)).match(/id: skin:dsh-cool-skin/g) ?? []
-  assert.equal(rows.length, 1)
+  await fakePackage(dir, 'dsh-other-skin', '- insert:\n    - id: other\n      name: dsh-other-skin\n')
+
+  await applyBundlePatch(dir, 'dsh-other-skin')
+  assert.match(await patchOf(dir), /insert:/)
 })
 
-test('用户自己写的行和注释原样保留', async () => {
+test('一个包贡献多行时全部搬过来', async () => {
+  const dir = await makeProfile()
+  await fakePackage(dir, 'dsh-two-row', [
+    '- insert:',
+    '    - id: a',
+    '      name: dsh-two-row',
+    '- id: agent-default-model',
+    '  config:',
+    '    provider: x',
+    '',
+  ].join('\n'))
+
+  assert.equal((await applyBundlePatch(dir, 'dsh-two-row')).rows, 2)
+  const installed = await listInstalled(dir)
+  assert.equal(installed.length, 1)
+  assert.equal(installed[0]?.packageName, 'dsh-two-row')
+})
+
+test('重复安装幂等，不会搬第二遍', async () => {
+  const dir = await makeProfile()
+  await fakePackage(dir, '@dsh-external/dsh-qq2006', QQ_PATCH)
+  await applyBundlePatch(dir, '@dsh-external/dsh-qq2006')
+  assert.equal((await applyBundlePatch(dir, '@dsh-external/dsh-qq2006')).rows, 0)
+  assert.equal((await patchOf(dir)).match(/id: ui-skin-qq2006/g)?.length, 1)
+})
+
+test('没有 dsh.bundle 声明的包不是皮肤，拒绝挂载', async () => {
+  const dir = await makeProfile()
+  await fakePackage(dir, 'just-a-library')
+  await assert.rejects(
+    () => applyBundlePatch(dir, 'just-a-library'),
+    /没有声明 dsh.bundle.patch/,
+  )
+})
+
+test('用户自己写的行和注释原样保留，卸载只摘我们标记过的', async () => {
   const original = [
     '# 我自己的配置，别动',
     '- insert:',
@@ -41,52 +102,55 @@ test('用户自己写的行和注释原样保留', async () => {
     '',
   ].join('\n')
   const dir = await makeProfile(original)
+  await fakePackage(dir, '@dsh-external/dsh-qq2006', QQ_PATCH)
 
-  await addRow(dir, 'dsh-cool-skin')
+  await applyBundlePatch(dir, '@dsh-external/dsh-qq2006')
   const afterAdd = await patchOf(dir)
   assert.match(afterAdd, /# 我自己的配置，别动/)
   assert.match(afterAdd, /id: my-own-plugin/)
 
-  // 卸载只摘自己那行，用户的行和注释都还在。
-  assert.equal(await removeRow(dir, 'dsh-cool-skin'), true)
+  assert.equal(await removeRow(dir, '@dsh-external/dsh-qq2006'), true)
   const afterRemove = await patchOf(dir)
   assert.match(afterRemove, /# 我自己的配置，别动/)
   assert.match(afterRemove, /id: my-own-plugin/)
-  assert.doesNotMatch(afterRemove, /skin:dsh-cool-skin/)
+  assert.doesNotMatch(afterRemove, /ui-skin-qq2006/)
 })
 
-test('patch 文件不是条目数组时报错，绝不覆盖用户的文件', async () => {
-  const dir = await makeProfile('someKey: 请不要把我变成数组\n')
-  await assert.rejects(() => addRow(dir, 'dsh-cool-skin'), /不是 patch 条目数组/)
-  // 关键是原文件没被动过。
-  assert.equal(await patchOf(dir), 'someKey: 请不要把我变成数组\n')
-})
-
-test('已安装列表只认市场装的行，不把用户自己的插件算进来', async () => {
+test('已安装列表认的是归属标记，不把用户自己的插件算进来', async () => {
   const dir = await makeProfile([
     '- insert:',
     '    - id: my-own-plugin',
     '      name: some-plugin',
     '',
   ].join('\n'))
-  await addRow(dir, 'dsh-cool-skin')
+  await fakePackage(dir, '@dsh-external/dsh-qq2006', QQ_PATCH)
+  await applyBundlePatch(dir, '@dsh-external/dsh-qq2006')
 
   const installed = await listInstalled(dir)
   assert.equal(installed.length, 1)
-  assert.equal(installed[0]?.packageName, 'dsh-cool-skin')
-  assert.equal(installed[0]?.rowId, rowIdOf('dsh-cool-skin'))
+  assert.equal(installed[0]?.packageName, '@dsh-external/dsh-qq2006')
+  assert.equal(installed[0]?.version, '1.2.3')
 })
 
-test('已安装列表带上 profile 里记录的依赖 spec', async () => {
+test('已安装列表带上 profile 里记录的依赖 spec —— 前端按它判断装没装', async () => {
   const dir = await makeProfile()
+  await fakePackage(dir, '@dsh-external/dsh-qq2006', QQ_PATCH)
   await writeFile(
     join(dir, 'package.json'),
-    JSON.stringify({ dependencies: { 'dsh-cool-skin': '^1.2.0' } }),
+    JSON.stringify({ dependencies: { '@dsh-external/dsh-qq2006': 'github:LaplaceYoung/dsh-qq2006' } }),
     'utf8',
   )
-  await addRow(dir, 'dsh-cool-skin')
+  await applyBundlePatch(dir, '@dsh-external/dsh-qq2006')
+
   const installed = await listInstalled(dir)
-  assert.equal(installed[0]?.spec, '^1.2.0')
+  assert.equal(installed[0]?.spec, 'github:LaplaceYoung/dsh-qq2006')
+})
+
+test('patch 文件不是条目数组时报错，绝不覆盖用户的文件', async () => {
+  const dir = await makeProfile('someKey: 请不要把我变成数组\n')
+  await fakePackage(dir, '@dsh-external/dsh-qq2006', QQ_PATCH)
+  await assert.rejects(() => applyBundlePatch(dir, '@dsh-external/dsh-qq2006'), /不是 patch 条目数组/)
+  assert.equal(await patchOf(dir), 'someKey: 请不要把我变成数组\n')
 })
 
 test('卸载一个没装过的包只是返回 false，不抛', async () => {
@@ -99,4 +163,39 @@ test('ctx.baseUrl 是 file:// URL 或裸路径都能解成目录', () => {
   assert.equal(profileDirOf('file:///Users/x/.dsh/profiles/web'), '/Users/x/.dsh/profiles/web')
   assert.equal(profileDirOf(undefined), undefined)
   assert.equal(profileDirOf(''), undefined)
+})
+
+test('把"挂载自己"写成"改一行"的笔误会被接住 —— 否则装了静默不生效', async () => {
+  const dir = await makeProfile()
+  // 线上真实写法：没有 insert，id 是新的，name 是自己 —— applyEntryPatches 会
+  // 因为找不到该 id 而跳过，走官方 bundles 机制也一样不生效。
+  await fakePackage(dir, '@dsh-external/dsh-qq2006', QQ_PATCH)
+
+  const applied = await applyBundlePatch(dir, '@dsh-external/dsh-qq2006')
+  assert.equal(applied.rows, 1)
+  assert.equal(applied.repaired, 1)
+  assert.match(await patchOf(dir), /insert:/)
+})
+
+test('真正的覆盖型 patch 不碰 —— 判据是 name 必须正是这个包自己', async () => {
+  const dir = await makeProfile()
+  await fakePackage(dir, 'dsh-tweaker', [
+    '# 覆盖别人的行：name 指向别的包',
+    "- id: agent-default-model",
+    "  name: '@deepseek-ai/dsh-agent'",
+    '  config:',
+    '    provider: x',
+    '',
+  ].join('\n'))
+
+  const applied = await applyBundlePatch(dir, 'dsh-tweaker')
+  assert.equal(applied.repaired, 0)
+  assert.doesNotMatch(await patchOf(dir), /insert:/)
+})
+
+test('不写 name 的覆盖型 patch 也不碰', async () => {
+  const dir = await makeProfile()
+  await fakePackage(dir, 'dsh-tweaker2', '- id: agent-default-model\n  config:\n    provider: y\n')
+  const applied = await applyBundlePatch(dir, 'dsh-tweaker2')
+  assert.equal(applied.repaired, 0)
 })

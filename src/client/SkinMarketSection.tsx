@@ -8,7 +8,7 @@ import { useCallback, useEffect, useMemo, useRef, useState, type JSX } from 'rea
 import type { CatalogPage, Diagnostics, InstalledSkin, SkinEntry } from '../types.ts'
 import type { MarketApi } from './api.ts'
 import { IDLE, reduce, type CardState, type CardVerb } from './card-state.ts'
-import { SkinCard, packageNameOf } from './SkinCard.tsx'
+import { SkinCard, cardKeyOf } from './SkinCard.tsx'
 import { DiagnosticsPanel, InstalledPanel } from './panels.tsx'
 import styles from './market.module.css'
 
@@ -110,30 +110,31 @@ export function SkinMarketSection({ api, t, version }: SkinMarketInjected): JSX.
   }, [loadInstalled, setState])
 
   const onInstall = useCallback((entry: SkinEntry) => {
-    const name = packageNameOf(entry)
-    void runAction(name, 'install', onEvent => api.install(entry.installSpec ?? '', name, onEvent))
+    void runAction(cardKeyOf(entry), 'install', onEvent => api.install(entry.installSpec ?? '', onEvent))
   }, [api, runAction])
 
   const onAllowBuilds = useCallback((entry: SkinEntry) => {
-    const name = packageNameOf(entry)
-    void runAction(name, 'install', onEvent => api.allowBuilds(entry.installSpec ?? '', name, onEvent))
+    void runAction(cardKeyOf(entry), 'install', onEvent => api.allowBuilds(entry.installSpec ?? '', onEvent))
   }, [api, runAction])
 
+  // 卸载要的是真实包名，从已装列表里按 spec 反查 —— 卡片自己并不知道它。
   const onUninstallEntry = useCallback((entry: SkinEntry) => {
-    const name = packageNameOf(entry)
-    void runAction(name, 'uninstall', onEvent => api.uninstall(name, onEvent))
-  }, [api, runAction])
+    const match = installed.find(row => row.spec === entry.installSpec)
+    if (match === undefined) return
+    void runAction(cardKeyOf(entry), 'uninstall', onEvent => api.uninstall(match.packageName, onEvent))
+  }, [api, installed, runAction])
 
   const onUninstallName = useCallback((packageName: string) => {
     void runAction(packageName, 'uninstall', onEvent => api.uninstall(packageName, onEvent))
   }, [api, runAction])
 
   const onDismiss = useCallback((entry: SkinEntry) => {
-    setState(packageNameOf(entry), IDLE)
+    setState(cardKeyOf(entry), IDLE)
   }, [setState])
 
-  const installedNames = useMemo(
-    () => new Set(installed.map(item => item.packageName)),
+  // 按 spec 判断"这条装没装"：spec 是集市与本机之间唯一稳定的对应关系。
+  const installedSpecs = useMemo(
+    () => new Set(installed.map(item => item.spec).filter((spec): spec is string => spec !== undefined)),
     [installed],
   )
 
@@ -223,8 +224,8 @@ export function SkinMarketSection({ api, t, version }: SkinMarketInjected): JSX.
               <SkinCard
                 key={`${entry.skinId}:${entry.variant ?? ''}`}
                 entry={entry}
-                installed={installedNames.has(packageNameOf(entry))}
-                state={states.get(packageNameOf(entry)) ?? IDLE}
+                installed={entry.installSpec !== undefined && installedSpecs.has(entry.installSpec)}
+                state={states.get(cardKeyOf(entry)) ?? IDLE}
                 t={t}
                 onInstall={onInstall}
                 onUninstall={onUninstallEntry}

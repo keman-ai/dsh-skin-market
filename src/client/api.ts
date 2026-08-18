@@ -20,11 +20,11 @@ export interface MarketApi {
   catalog(query: { q: string; sort: string; page: number }): Promise<CatalogPage>
   installed(): Promise<readonly InstalledSkin[]>
   diagnostics(): Promise<Diagnostics>
-  /** 装一个包，过程事件逐条回调。 */
-  install(spec: string, packageName: string, onEvent: (event: InstallEvent) => void): Promise<void>
+  /** 装一个包，过程事件逐条回调。真实包名由 host 从安装结果读出，随 done 事件回来。 */
+  install(spec: string, onEvent: (event: InstallEvent) => void): Promise<void>
   uninstall(packageName: string, onEvent: (event: InstallEvent) => void): Promise<void>
   /** 用户明确同意后：授权构建脚本并重试安装。 */
-  allowBuilds(spec: string, packageName: string, onEvent: (event: InstallEvent) => void): Promise<void>
+  allowBuilds(spec: string, onEvent: (event: InstallEvent) => void): Promise<void>
 }
 
 /**
@@ -88,10 +88,8 @@ export function createApi(): MarketApi {
     },
     installed: async () => (await getJson<{ items: InstalledSkin[] }>('/installed')).items,
     diagnostics: async () => await getJson<Diagnostics>('/diagnostics'),
-    install: async (spec, packageName, onEvent) => { await stream('/install', { spec, packageName }, onEvent) },
+    install: async (spec, onEvent) => { await stream('/install', { spec }, onEvent) },
     uninstall: async (packageName, onEvent) => { await stream('/uninstall', { packageName }, onEvent) },
-    allowBuilds: async (spec, packageName, onEvent) => {
-      await stream('/allow-builds', { spec, packageName }, onEvent)
-    },
+    allowBuilds: async (spec, onEvent) => { await stream('/allow-builds', { spec }, onEvent) },
   }
 }
