@@ -58,6 +58,8 @@ declare module '@deepseek-ai/cordis' {
     inject(services: readonly string[], callback: (ctx: Context) => void): void
     /** 读一个可能不存在的服务。 */
     get<T = unknown>(name: string): T | undefined
+    /** 订阅一个事件，返回退订函数。 */
+    on(event: string, listener: (...args: never[]) => void): Disposer
   }
 }
 
@@ -101,10 +103,41 @@ declare module '@deepseek-ai/dsh-client-runtime/client' {
     getSnapshot(): { revision: number }
   }
 
+  /** 一个可选主题：id、基色板、以及 alias token 覆盖。 */
+  export interface ThemeDefinition {
+    id: string
+    colorScheme: 'light' | 'dark'
+    tokens: Record<string, string>
+  }
+
+  /** 主题服务每次变化时发布的不可变快照。 */
+  export interface ThemeSnapshot {
+    /** 持久化的偏好，可能是 `system`。 */
+    preference: string
+    /** 解析后的当前主题。 */
+    active: ThemeDefinition
+    /** 已注册的主题，含内置的 light / dark 与皮肤注册进来的。 */
+    themes: readonly ThemeDefinition[]
+    revision: number
+  }
+
+  /**
+   * 主题注册表。皮肤插件在自己的 apply 里 `register` 一个主题，但 dsh 的
+   * 「外观」设置行只渲染固定的三个内置项，不列第三方主题 —— 也就没有任何
+   * 界面能选中它。市场补的正是这一环：把已注册的主题列出来，让用户点。
+   */
+  export interface ThemeRuntime {
+    getTheme(): ThemeSnapshot
+    /** 切换偏好。传已注册的主题 id 或 `system`；未注册的 id 会抛错。 */
+    setTheme(id: string): void
+  }
+
   /** 浏览器插件上下文。 */
   export interface ClientContext extends Context {
     slots: SlotsService
     locale: LocaleService
+    /** 由 ui-theme 提供；组合里没有它时 `ctx.get('theme')` 返回 undefined。 */
+    theme?: ThemeRuntime
   }
 }
 

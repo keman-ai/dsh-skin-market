@@ -9,9 +9,10 @@
 // 跨插件协作走服务，绝不做值导入（client bundle 的纯净性门禁会拦）。
 import type {} from '@deepseek-ai/dsh-client-ui-settings/client'
 import type {} from '@deepseek-ai/dsh-client-locale/client'
-import type { ClientContext } from '@deepseek-ai/dsh-client-runtime/client'
+import type { ClientContext, ThemeRuntime } from '@deepseek-ai/dsh-client-runtime/client'
 import type { ComponentType } from 'react'
 import { createApi } from './api.ts'
+import { optionsOf, restoreSaved, selectTheme } from './appearance.ts'
 import { SkinMarketSection, type SkinMarketInjected } from './SkinMarketSection.tsx'
 import { en, zh } from './locales.ts'
 
@@ -37,7 +38,24 @@ export function apply(ctx: ClientContext): void {
 
   const t = ctx.locale.bind(NS)
   const api = createApi()
-  const injected = (): SkinMarketInjected => ({ api, t, version: VERSION })
+
+  // ui-theme 是 web 组合的标配，但不做硬依赖：没有它时市场照样能逛能装，
+  // 只是不提供「应用皮肤」那一步。
+  const theme = ctx.get<ThemeRuntime>('theme')
+  if (theme !== undefined) {
+    // 第三方主题 id 不进 Host settings，重启后得由我们把上次的选择放回去。
+    ctx.effect(() => restoreSaved(ctx, theme), 'skin-market: restore selected skin')
+  }
+
+  const appearance = theme === undefined ? undefined : {
+    options: () => optionsOf(theme.getTheme()),
+    subscribe: (listener: () => void) => ctx.on('theme/change', listener),
+    select: (id: string) => { selectTheme(theme, id) },
+  }
+
+  const injected = (): SkinMarketInjected => ({
+    api, t, version: VERSION, ...(appearance === undefined ? {} : { appearance }),
+  })
 
   // slots.inject 跟随 slot 的延迟声明与重新声明，因此不必 import 设置外壳。
   ctx.slots.inject('settings.section', () => ctx.slots.register({

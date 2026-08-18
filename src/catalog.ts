@@ -21,6 +21,12 @@ const CACHE_TTL_MS = 10 * 60 * 1000
 /** 上游超时。宁可快速回落到缓存，也不要让设置页转圈。 */
 const UPSTREAM_TIMEOUT_MS = 8000
 
+/**
+ * 热度回报超时。比目录短一半：它是可有可无的埋点，
+ * 拿不到响应就算了，没有任何理由为它多等。
+ */
+const REPORT_TIMEOUT_MS = 4000
+
 /** 一页最多几条。上游给更多也截断，避免一次渲染上千张卡片。 */
 const MAX_PAGE_SIZE = 60
 

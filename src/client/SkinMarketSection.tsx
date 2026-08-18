@@ -7,9 +7,10 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type JSX } from 'react'
 import type { CatalogPage, Diagnostics, InstalledSkin, SkinEntry } from '../types.ts'
 import type { MarketApi } from './api.ts'
+import type { AppearanceOption } from './appearance.ts'
 import { IDLE, reduce, type CardState, type CardVerb } from './card-state.ts'
 import { SkinCard, cardKeyOf } from './SkinCard.tsx'
-import { DiagnosticsPanel, InstalledPanel } from './panels.tsx'
+import { AppearancePicker, DiagnosticsPanel, InstalledPanel } from './panels.tsx'
 import styles from './market.module.css'
 
 /** 由 slot 的 inject 工厂注入的业务面。 */
@@ -18,6 +19,15 @@ export interface SkinMarketInjected {
   readonly t: (key: string, params?: Record<string, string | number>) => string
   /** 插件版本，页头展示。 */
   readonly version: string
+  /**
+   * 外观面。宿主组合里没有 ui-theme 时为 undefined —— 那时市场只管装，
+   * 不管应用（外观区块整个不渲染）。
+   */
+  readonly appearance?: {
+    readonly options: () => readonly AppearanceOption[]
+    readonly subscribe: (listener: () => void) => () => void
+    readonly select: (id: string) => void
+  }
 }
 
 type Tab = 'discover' | 'installed' | 'diagnostics'
@@ -37,7 +47,7 @@ const SORTS = [
  * @param props - 注入的业务面。
  * @returns 页面元素。
  */
-export function SkinMarketSection({ api, t, version }: SkinMarketInjected): JSX.Element {
+export function SkinMarketSection({ api, t, version, appearance }: SkinMarketInjected): JSX.Element {
   const [tab, setTab] = useState<Tab>('discover')
   const [term, setTerm] = useState('')
   const [query, setQuery] = useState('')
@@ -48,6 +58,14 @@ export function SkinMarketSection({ api, t, version }: SkinMarketInjected): JSX.
   const [installed, setInstalled] = useState<readonly InstalledSkin[]>([])
   const [diagnostics, setDiagnostics] = useState<Diagnostics | undefined>(undefined)
   const [states, setStates] = useState<ReadonlyMap<string, CardState>>(new Map())
+  const [themes, setThemes] = useState<readonly AppearanceOption[]>(() => appearance?.options() ?? [])
+
+  // 皮肤的 bundle 是异步加载的，主题会在页面起来之后才注册进来。
+  useEffect(() => {
+    if (appearance === undefined) return
+    setThemes(appearance.options())
+    return appearance.subscribe(() => { setThemes(appearance.options()) })
+  }, [appearance])
 
   // 卸载后仍可能有事件回来，用它挡住对已卸组件的 setState。
   const alive = useRef(true)
@@ -238,7 +256,12 @@ export function SkinMarketSection({ api, t, version }: SkinMarketInjected): JSX.
       )}
 
       {tab === 'installed' && (
-        <InstalledPanel items={installed} states={states} t={t} onUninstall={onUninstallName} />
+        <>
+          {appearance !== undefined && themes.length > 0 && (
+            <AppearancePicker options={themes} t={t} onSelect={appearance.select} />
+          )}
+          <InstalledPanel items={installed} states={states} t={t} onUninstall={onUninstallName} />
+        </>
       )}
 
       {tab === 'diagnostics' && (

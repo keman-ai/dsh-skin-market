@@ -102,22 +102,29 @@ const repairedIdOf = (packageName: string, ordinal: number): string => (
  * 读一个已安装包声明的 bundle patch 文件。
  * @param profileDir - profile 目录。
  * @param packageName - 包名（必须是真实包名，不是从 spec 猜的）。
- * @returns patch 文件路径与解析后的文档。
+ * @param packageDir - 包的实际目录；调用方能从 pnpm 问到时一定要传。
+ * @returns 解析后的 patch 文档。
  * @throws 包不存在、没声明 dsh.bundle、或 patch 文件读不出来。
  */
-async function loadBundlePatch(profileDir: string, packageName: string): Promise<Document> {
-  const require = createRequire(join(profileDir, 'noop.js'))
-  let manifestPath: string
-  try {
-    manifestPath = require.resolve(`${packageName}/package.json`)
-  } catch {
-    // 退一步用目录直拼：有些包的 exports 不暴露 package.json。
-    manifestPath = join(profileDir, 'node_modules', packageName, 'package.json')
-  }
+async function loadBundlePatch(
+  profileDir: string, packageName: string, packageDir?: string,
+): Promise<Document> {
+  const manifestPath = packageDir !== undefined
+    ? join(packageDir, 'package.json')
+    : resolveManifest(profileDir, packageName)
 
-  const manifest = JSON.parse(await readFile(manifestPath, 'utf8')) as {
-    dsh?: { bundle?: { patch?: string } }
+  let raw: string
+  try {
+    raw = await readFile(manifestPath, 'utf8')
+  } catch {
+    // 仓库根没有 package.json —— 多半是一个把每个皮肤放在子目录里的多皮肤仓库。
+    throw new Error(
+      `${packageName} 装出来的目录里没有 package.json。`
+      + '这个皮肤多半放在仓库的子目录里，而 pnpm 不支持从 git 仓库的子目录安装'
+      + '（`#` 后面只能跟分支或提交）。请按作者在集市页上给的说明手动安装。',
+    )
   }
+  const manifest = JSON.parse(raw) as { dsh?: { bundle?: { patch?: string } } }
   const relative = manifest.dsh?.bundle?.patch
   if (relative === undefined) {
     throw new Error(
@@ -131,6 +138,26 @@ async function loadBundlePatch(profileDir: string, packageName: string): Promise
     throw new Error(`${packageName} 的 ${relative} 不是 patch 条目数组`)
   }
   return doc
+}
+
+/**
+ * 没有 pnpm 给的路径时，退回自己找 manifest。
+ *
+ * 直接拼 `node_modules/<包名>` 并不可靠：pnpm 的 isolated 布局把实体放在
+ * `.pnpm/<hash>/node_modules/<包名>`，顶层只是一个符号链接，而这个链接的
+ * 建立时机没有保证 —— 装完立刻去读会 ENOENT。所以先走 Node 的解析算法。
+ * @param profileDir - profile 目录。
+ * @param packageName - 包名。
+ * @returns package.json 的路径（可能不存在，由调用方的读操作报错）。
+ */
+function resolveManifest(profileDir: string, packageName: string): string {
+  const require = createRequire(join(profileDir, 'noop.js'))
+  try {
+    return require.resolve(`${packageName}/package.json`)
+  } catch {
+    // exports 不暴露 package.json 的包会走到这里。
+    return join(profileDir, 'node_modules', packageName, 'package.json')
+  }
 }
 
 /**
@@ -212,16 +239,17 @@ async function readVersion(profileDir: string, packageName: string): Promise<{ v
  * 语义都保持不变。已经搬过就不重复搬（幂等）。
  * @param profileDir - profile 目录。
  * @param packageName - 真实包名（从安装结果读出来的，不是猜的）。
+ * @param packageDir - 包的实际目录；调用方能从 pnpm 问到时一定要传。
  * @returns 搬进去的条目数与其中被修正的行数；已经在了返回 rows: 0。
  */
 export async function applyBundlePatch(
-  profileDir: string, packageName: string,
+  profileDir: string, packageName: string, packageDir?: string,
 ): Promise<{ rows: number; repaired: number }> {
   const { file, doc } = await loadPatch(profileDir)
   const seq = doc.contents as YAMLSeq
   if (seq.items.some(item => ownerOf(item) === packageName)) return { rows: 0, repaired: 0 }
 
-  const bundle = await loadBundlePatch(profileDir, packageName)
+  const bundle = await loadBundlePatch(profileDir, packageName, packageDir)
   const rows = (bundle.contents as YAMLSeq).items
   if (rows.length === 0) {
     throw new Error(`${packageName} 的 bundle patch 是空的，没有可挂载的插件行`)

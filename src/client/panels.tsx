@@ -2,10 +2,61 @@
 
 import type { JSX } from 'react'
 import type { Diagnostics, InstalledSkin } from '../types.ts'
+import type { AppearanceOption } from './appearance.ts'
 import type { CardState } from './card-state.ts'
 import styles from './market.module.css'
 
 type Translate = (key: string, params?: Record<string, string | number>) => string
+
+/** 外观区块入参。 */
+export interface AppearancePickerProps {
+  readonly options: readonly AppearanceOption[]
+  readonly t: Translate
+  readonly onSelect: (id: string) => void
+}
+
+/** 内置项有本地化名字；皮肤注册的主题按它自己的 id 显示。 */
+const BUILTIN_LABEL: Record<string, string> = {
+  system: 'appearance.system',
+  light: 'appearance.light',
+  dark: 'appearance.dark',
+}
+
+/** 内置项翻译，皮肤主题原样显示自己的 id。 */
+function labelOf(id: string, t: Translate): string {
+  const key = BUILTIN_LABEL[id]
+  return key === undefined ? id : t(key)
+}
+
+/**
+ * 外观选择器 —— 皮肤装上之后真正生效的那一步。
+ *
+ * dsh 自己的外观行只渲染三个内置项，皮肤注册进主题服务后没有界面能选中它。
+ * 这里把注册表里的全部主题列出来。
+ * @param props - 选项、文案与回调。
+ * @returns 区块元素。
+ */
+export function AppearancePicker({ options, t, onSelect }: AppearancePickerProps): JSX.Element {
+  return (
+    <section className={styles.appearance}>
+      <h3 className={styles.appearanceTitle}>{t('appearance.title')}</h3>
+      <div className={styles.cubes}>
+        {options.map(option => (
+          <button
+            key={option.id}
+            className={styles.cube}
+            type="button"
+            aria-pressed={option.active}
+            onClick={() => { onSelect(option.id) }}
+          >
+            {labelOf(option.id, t)}
+          </button>
+        ))}
+      </div>
+      <p className={styles.appearanceHint}>{t('appearance.hint')}</p>
+    </section>
+  )
+}
 
 /** 已安装面板入参。 */
 export interface InstalledPanelProps {

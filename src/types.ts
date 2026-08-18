@@ -88,6 +88,7 @@ export type InstallErrorCode =
   | 'PATCH_WRITE_FAILED'
   | 'ALREADY_INSTALLED'
   | 'NOT_INSTALLED'
+  | 'NOT_A_BUNDLE'
 
 /** 诊断页的一行。 */
 export interface DiagnosticRow {
