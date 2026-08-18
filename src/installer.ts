@@ -7,7 +7,9 @@
 import { spawn } from 'node:child_process'
 import { readFile } from 'node:fs/promises'
 import { join } from 'node:path'
-import { applyBundlePatch, isWritable, listInstalled, readDependencies, removeRow } from './profile.ts'
+import {
+  applyBundlePatch, findBySpec, isWritable, listInstalled, readDependencies, removeRow,
+} from './profile.ts'
 import type { InstallEvent, InstallErrorCode } from './types.ts'
 
 /** 单次 pnpm 调用的上限。装一个皮肤包不该超过这个数，卡住就报错而不是永远转圈。 */
@@ -138,8 +140,9 @@ export async function install(
   if (!await isWritable(profileDir)) {
     throw new InstallFailure('PROFILE_UNRESOLVED', `profile 目录不可写：${profileDir}`)
   }
+  // 判重按 spec，不按包名 —— 包名要装完才知道（见下）。这里只拦「装好且挂上了」的，
+  // 「依赖在但没挂上」是可修复的不一致状态（卸载中途失败会留下），照常往下走。
   const installed = await listInstalled(profileDir)
-  // 按 spec 判重，不按包名 —— 包名要装完才知道（见下）。
   if (installed.some(row => row.spec === spec)) {
     throw new InstallFailure('ALREADY_INSTALLED', `${spec} 已经装过了`)
   }
@@ -170,11 +173,14 @@ export async function install(
    * 的模块名 —— pnpm 报成功，皮肤却静默地不生效。
    */
   const after = await readDependencies(profileDir)
+  // 依赖已经在时 pnpm 只回一句 Already up to date，什么也不新增 —— 这时按 spec
+  // 反查已有依赖，而不是把「装不上」的结论扣在一个其实装好了的包上。
   const packageName = Object.keys(after).find(name => !before.has(name))
+    ?? await findBySpec(profileDir, spec)
   if (packageName === undefined) {
     throw new InstallFailure(
       'PNPM_FAILED',
-      'pnpm 报告成功，但 profile 的依赖没有变化，无法确定装上的包名',
+      'pnpm 报告成功，但 profile 依赖里找不到这个 spec，无法确定装上的包名',
       tailOf(added.output),
     )
   }
@@ -234,8 +240,11 @@ function buildBlocked(target: string): InstallFailure {
  */
 export async function uninstall(profileDir: string, packageName: string, emit: Emit): Promise<void> {
   const installed = await listInstalled(profileDir)
-  if (!installed.some(row => row.packageName === packageName)) {
-    throw new InstallFailure('NOT_INSTALLED', `${packageName} 不在已安装列表里`)
+  const deps = await readDependencies(profileDir)
+  // 认「挂载行还在」或「依赖还在」任一即可：上一次卸载在 pnpm 那步失败过的话，
+  // 只剩依赖残留，用户重试卸载必须能把它清掉。
+  if (!installed.some(row => row.packageName === packageName) && deps[packageName] === undefined) {
+    throw new InstallFailure('NOT_INSTALLED', `${packageName} 既没有挂载行也不在依赖里`)
   }
 
   emit({ type: 'step', step: 'patch' })

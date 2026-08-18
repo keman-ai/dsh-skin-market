@@ -5,7 +5,7 @@ import assert from 'node:assert/strict'
 import { mkdir, mkdtemp, readFile, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { applyBundlePatch, listInstalled, profileDirOf, removeRow } from '../src/profile.ts'
+import { applyBundlePatch, findBySpec, listInstalled, profileDirOf, removeRow } from '../src/profile.ts'
 
 /** 一个临时 profile 目录。 */
 async function makeProfile(patch?: string): Promise<string> {
@@ -263,4 +263,25 @@ test('不写 name 的覆盖型 patch 也不碰', async () => {
   await fakePackage(dir, 'dsh-tweaker2', '- id: agent-default-model\n  config:\n    provider: y\n')
   const applied = await applyBundlePatch(dir, 'dsh-tweaker2')
   assert.equal(applied.repaired, 0)
+})
+
+test('按 spec 反查包名 —— 依赖已在时靠它认出装的是哪个包', async () => {
+  const dir = await makeProfile()
+  await writeFile(join(dir, 'package.json'), JSON.stringify({
+    dependencies: {
+      '@dsh-external/dsh-qq2006': 'github:LaplaceYoung/dsh-qq2006',
+      'other-plugin': '^1.0.0',
+    },
+  }), 'utf8')
+
+  assert.equal(
+    await findBySpec(dir, 'github:LaplaceYoung/dsh-qq2006'),
+    '@dsh-external/dsh-qq2006',
+  )
+  // pnpm 有时会缀上 commit，去掉 # 之后仍要认得出。
+  assert.equal(
+    await findBySpec(dir, 'github:LaplaceYoung/dsh-qq2006#abc1234'),
+    '@dsh-external/dsh-qq2006',
+  )
+  assert.equal(await findBySpec(dir, 'github:someone/unrelated'), undefined)
 })

@@ -176,6 +176,24 @@ export async function readDependencies(profileDir: string): Promise<Record<strin
   }
 }
 
+/**
+ * 在 profile 的依赖里按安装 spec 反查包名。
+ *
+ * 用于两种「依赖已经在了」的局面：重复安装，以及卸载时 `pnpm remove` 失败留下的
+ * 残留（patch 行已摘、依赖还在）。pnpm 有时会把 git spec 规范化并缀上 commit，
+ * 所以精确比不中时再按 `#` 之前的部分比一次。
+ * @param profileDir - profile 目录。
+ * @param spec - 目录给出的安装 spec。
+ * @returns 匹配到的包名；没有则 undefined。
+ */
+export async function findBySpec(profileDir: string, spec: string): Promise<string | undefined> {
+  const deps = Object.entries(await readDependencies(profileDir))
+  const exact = deps.find(([, value]) => value === spec)
+  if (exact !== undefined) return exact[0]
+  const bare = spec.split('#')[0]
+  return deps.find(([, value]) => value.split('#')[0] === bare)?.[0]
+}
+
 /** 已装包的实际版本。读不到就不给，不猜。 */
 async function readVersion(profileDir: string, packageName: string): Promise<{ version?: string }> {
   try {
