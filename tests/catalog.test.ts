@@ -322,3 +322,17 @@ test('目录里有装不了的条目时，findBySpec 不会白翻满 10 页', as
     await server.close()
   }
 })
+
+test('安装命令带 -w 时仍能取出 spec —— 集市会在命令里加这个必需 flag', () => {
+  const withFlag = normalizeEntry({
+    skinId: 's', slug: 'x',
+    installCommand: 'dsh plugin --profile web add -w github:owner/repo',
+  })
+  assert.equal(withFlag?.installSpec, 'github:owner/repo')
+
+  const npmPkg = normalizeEntry({
+    skinId: 's', slug: 'x',
+    installCommand: 'dsh plugin --profile web add -w dsh-theme-plugin',
+  })
+  assert.equal(npmPkg?.installSpec, 'dsh-theme-plugin')
+})

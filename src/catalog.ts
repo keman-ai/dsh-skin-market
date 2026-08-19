@@ -132,16 +132,23 @@ function safeSpec(spec: string | undefined): string | undefined {
 
 /**
  * 从集市给的整条安装命令里取出 spec。
- * 形如 `dsh plugin --profile web add github:owner/repo` —— 取最后一个非 flag 的词。
+ *
+ * 形如 `dsh plugin --profile web add -w github:owner/repo`。从末尾往回找第一个
+ * 不是 flag 的词 —— spec 总在命令最后，而 `add` 后面可能先跟着 `-w`（那个 flag
+ * 是必需的：profile 目录自带 pnpm-workspace.yaml，不加会被 pnpm 拒绝）。
  */
 function specFromCommand(command: string | undefined): string | undefined {
   if (command === undefined) return undefined
   const words = command.trim().split(/\s+/)
   const at = words.lastIndexOf('add')
-  if (at < 0 || at + 1 >= words.length) return undefined
-  const spec = words[at + 1]
-  // 本地路径式的命令（`add <克隆路径>`）不是能直接装的 spec。
-  return spec === undefined || spec.startsWith('-') || spec.startsWith('<') ? undefined : spec
+  if (at < 0) return undefined
+  for (let index = words.length - 1; index > at; index -= 1) {
+    const word = words[index]
+    if (word === undefined || word.startsWith('-')) continue
+    // 占位符式的命令（`add <克隆路径>`）不是能直接装的 spec。
+    return word.startsWith('<') ? undefined : word
+  }
+  return undefined
 }
 
 /**
