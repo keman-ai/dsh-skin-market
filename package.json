@@ -62,12 +62,10 @@
     "lightningcss": "^1.29.0",
     "react": "^18.2.0",
     "tsdown": "^0.15.6",
-    "typescript": "^5.7.0"
+    "typescript": "^5.7.0",
+    "yaml": "^2.9.0"
   },
   "engines": {
     "node": ">=20"
-  },
-  "dependencies": {
-    "yaml": "^2.9.0"
   }
 }

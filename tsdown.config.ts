@@ -87,6 +87,15 @@ export default defineConfig([
     fixedExtension: false,
     dts: false,
     clean: true,
+    /*
+     * 把依赖一起打进来，产物零运行时依赖。
+     *
+     * 分发方式决定了这一条：用户 clone 仓库后直接 `pnpm add <本地目录>`，那只是
+     * 建一个符号链接，不会去装这个目录自己的 dependencies —— 于是 host 半
+     * `import 'yaml'` 找不到包，dsh 启动直接失败。打进来就没有这个问题，
+     * 无论走 clone、npm 还是 tarball 都一样能跑。
+     */
+    noExternal: (id: string) => !id.startsWith('node:'),
   },
   {
     name: `${ID}/client`,
