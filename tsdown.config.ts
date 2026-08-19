@@ -8,7 +8,7 @@
  */
 
 import { readFile } from 'node:fs/promises'
-import { basename, dirname, resolve } from 'node:path'
+import { basename, dirname, relative, resolve } from 'node:path'
 import { defineConfig } from 'tsdown'
 import { transform } from 'lightningcss'
 
@@ -46,11 +46,14 @@ const cssModules = {
   name: 'skin-market-css-modules',
   resolveId(source: string, importer: string | undefined): string | null {
     if (!source.endsWith('.module.css')) return null
-    return CSS_PREFIX + (importer === undefined ? source : resolve(dirname(importer), source)) + CSS_SUFFIX
+    const absolute = importer === undefined ? source : resolve(dirname(importer), source)
+    // 存相对路径：这个虚拟 id 会被 rolldown 原样写进产物的 chunk 注释里，
+    // 用绝对路径就等于把构建机的目录结构（/Users/<谁>/…）发进公开仓库。
+    return CSS_PREFIX + relative(process.cwd(), absolute) + CSS_SUFFIX
   },
   async load(this: { addWatchFile(id: string): void }, virtualId: string): Promise<string | null> {
     if (!virtualId.startsWith(CSS_PREFIX)) return null
-    const file = virtualId.slice(CSS_PREFIX.length, -CSS_SUFFIX.length)
+    const file = resolve(process.cwd(), virtualId.slice(CSS_PREFIX.length, -CSS_SUFFIX.length))
     this.addWatchFile(file)
     const { code, exports } = transform({
       filename: file,
