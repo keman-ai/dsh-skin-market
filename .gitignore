@@ -1,4 +1,8 @@
 node_modules/
-lib/
 *.tsbuildinfo
 .DS_Store
+
+# lib/ 是**故意提交**的：用户 clone 下来要能直接安装，不必先构建。
+# git 源安装时 pnpm 默认拒绝执行 prepare 构建脚本，不带产物的包装进 dsh
+# 会因缺少入口文件而让它起不来 —— 集市里已经有皮肤栽在这上面。
+# 改完代码记得 pnpm build 后把 lib/ 一起提交。

@@ -96,7 +96,8 @@ export default defineConfig([
     platform: 'browser',
     target: 'es2023',
     dts: false,
-    sourcemap: true,
+    // 产物要提交进仓库，sourcemap 占一半体积且对使用者无用。
+    sourcemap: false,
     // host 半刚写进 lib/，这里再 clean 会把它删掉。
     clean: false,
     external: EXTERNALS,
