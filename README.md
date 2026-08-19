@@ -15,28 +15,23 @@
 
 ## 安装
 
-尚未发布到 npm，从源码装：
-
 ```sh
-git clone https://github.com/keman-ai/dsh-skin-market.git
-cd dsh-skin-market
-pnpm install
-pnpm build
-
-dsh plugin --profile web add -w "$PWD"
+dsh plugin --profile web add -w github:keman-ai/dsh-skin-market
 ```
 
-然后重启 dsh，打开 **设置 → 皮肤市场**：
+重启一次 dsh，打开 **设置 → 皮肤市场**。
 
 ```sh
 dsh --profile web
 ```
 
+**此后装皮肤只要刷新页面，不用再重启，也不用再敲命令。**
+
+> **`-w` 不能省。** profile 目录自带 `pnpm-workspace.yaml`，pnpm 因此认定它是 workspace 根并拒绝安装（`ERR_PNPM_ADDING_TO_ROOT`）。`-w` 就是「我确实要装到根」的声明；`dsh plugin` 会把它原样转发给 pnpm。pnpm 8 和 10 都需要。
+
+仓库里带着构建产物（`lib/`），也没有 `prepare` 脚本，所以从 git 源安装时 pnpm 不需要执行任何构建脚本，你不必为它授权 `allowBuilds`。
+
 从 harness 源码运行的话，把上面两条 `dsh` 换成在 harness 目录里跑 `pnpm dsh`。
-
-> **`-w` 不能省。** profile 目录自带 `pnpm-workspace.yaml`，pnpm 因此认定它是 workspace 根并拒绝安装（`ERR_PNPM_ADDING_TO_ROOT`）。`-w` 就是"我确实要装到根"的声明；`dsh plugin` 会把它原样转发给 pnpm。pnpm 8 和 10 都需要。
-
-发布到 npm 之后，上面整段会简化成一行 `dsh plugin --profile web add -w dsh-skin-market`。
 
 ### 卸载
 
@@ -44,7 +39,7 @@ dsh --profile web
 dsh plugin --profile web remove dsh-skin-market
 ```
 
-用市场装的皮肤不会跟着消失 —— 它们是 profile 里独立的依赖，要单独卸（市场页的「已安装」里点卸载，或同样用 `dsh plugin remove`）。
+用市场装的皮肤不会跟着消失 —— 它们是 profile 里独立的依赖，在市场页的「已安装」里单独卸。
 
 ## 运行环境
 
@@ -91,7 +86,9 @@ pnpm check     # 类型检查
 pnpm test      # 单元测试
 ```
 
-改完代码重新 `pnpm build`，然后重启 dsh。插件是以 `link:` 装进 profile 的，不必重新 `add`。
+改完代码重新 `pnpm build`，然后重启 dsh。插件以 `link:` 装进 profile 时不必重新 `add`。
+
+**`lib/` 是故意提交进仓库的**：用户从 git 源安装时 pnpm 默认不执行构建脚本，不带产物的包会因缺入口文件让 dsh 起不来。所以改完代码要把 `pnpm build` 的产物一并提交。
 
 ### 两半
 
