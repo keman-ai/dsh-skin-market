@@ -13,8 +13,25 @@ import {
 } from './profile.ts'
 import type { InstallEvent, InstallErrorCode } from './types.ts'
 
-/** 单次 pnpm 调用的上限。装一个皮肤包不该超过这个数，卡住就报错而不是永远转圈。 */
-const PNPM_TIMEOUT_MS = 5 * 60 * 1000
+/**
+ * 单次 pnpm 调用的上限。
+ *
+ * 🔴 原本是 5 分钟，实测不够：一个 68.7 MB 的皮肤仓库（作者把素材内嵌进 bundle，
+ * 这在皮肤里并不罕见）走代理 clone，310 秒才刚拉到一半就被杀了，已下载的 132 MB
+ * 全部作废，重试还得从头来。把"慢"当成"卡死"，代价比多等一会儿大得多。
+ *
+ * 20 分钟是留给最坏情况的兜底，不是期望值 —— 正常仓库几十秒就完事。真卡死了也还是
+ * 会结束，不会永远转圈。
+ */
+const PNPM_TIMEOUT_MS = 20 * 60 * 1000
+
+/**
+ * 心跳间隔：git clone 期间 pnpm 完全静默（进度条是 TTY 动画，append-only 下
+ * 那行 `Progress: resolved N` 拉完之前根本不动），界面看着就像死了。每隔这么久
+ * 补一行"还活着"，让人知道该等而不是该重试 —— 重复点安装会起第二个 pnpm 抢同一条
+ * 带宽，只会更慢，实测就撞上过。
+ */
+const HEARTBEAT_MS = 20 * 1000
 
 /**
  * profile 目录自带 `pnpm-workspace.yaml`（`packages: ['.']`，dsh 初始化时写的），
@@ -80,15 +97,28 @@ function run(command: string, args: readonly string[], cwd: string, emit?: Emit)
     let output = ''
     let settled = false
 
+    const startedAt = Date.now()
     const timer = setTimeout(() => {
       if (settled) return
       child.kill('SIGKILL')
-      output += `\n[超时] 命令超过 ${PNPM_TIMEOUT_MS / 1000} 秒未结束，已终止。`
+      output += `\n[超时] 命令超过 ${PNPM_TIMEOUT_MS / 60_000} 分钟未结束，已终止。`
+        + '\n仓库过大或网络过慢时会走到这里；已下载的部分不会保留，重试将从头开始。'
     }, PNPM_TIMEOUT_MS)
+
+    // 静默期的心跳。只在真的没有新输出时才补，有输出就让输出自己说话。
+    let quietSince = Date.now()
+    const heartbeat = setInterval(() => {
+      if (settled || emit === undefined) return
+      if (Date.now() - quietSince < HEARTBEAT_MS) return
+      const seconds = Math.round((Date.now() - startedAt) / 1000)
+      emit({ type: 'log', line: `… 仍在下载，已用时 ${seconds}s（大仓库可能要几分钟，请勿重复点击）` })
+      quietSince = Date.now()
+    }, HEARTBEAT_MS)
 
     const consume = (chunk: Buffer): void => {
       const text = chunk.toString()
       output += text
+      quietSince = Date.now()
       if (emit === undefined) return
       for (const line of text.split('\n')) {
         const trimmed = line.trimEnd()
@@ -102,6 +132,7 @@ function run(command: string, args: readonly string[], cwd: string, emit?: Emit)
       if (settled) return
       settled = true
       clearTimeout(timer)
+      clearInterval(heartbeat)
       resolve({ ok, output })
     }
     child.on('error', (error) => {
