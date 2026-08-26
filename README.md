@@ -137,7 +137,6 @@ pnpm test      # 单元测试
 |---|---|
 | [dsh.a2hmarket.ai](https://dsh.a2hmarket.ai) | 皮肤目录站，作者在这里上架。本插件的目录就是从这里拉的 |
 | [dsh-skin-pack](https://github.com/keman-ai/dsh-skin-pack) | 28 套官方皮肤的源码，一个仓库全在里面 |
-| [dsh-skin-dev](https://github.com/keman-ai/dsh-skin-dev) | 想自己做一套皮肤，从这里开始 |
 
 <p align="center">
   <img src="market.png" alt="DSH 皮肤集市：社区皮肤一览，看效果、读说明、复制一行命令装上" width="100%">
