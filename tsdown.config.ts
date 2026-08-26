@@ -58,11 +58,24 @@ const cssModules = {
     const { code, exports } = transform({
       filename: file,
       code: await readFile(file),
-      cssModules: { pattern: '[hash]_[local]' },
+      /*
+       * 🔴 不用 [hash]：lightningcss 的哈希带不确定成分，同一份源码连续构建两次
+       * 得到的类名都不同。后果有两个 —— lib/ 是提交进仓库的（git 源安装依赖它），
+       * 每次构建都会多出几十行纯噪音的 diff；CI 里「构建产物是否与提交的一致」
+       * 那道闸也就永远是红的，等于没有。
+       *
+       * 换成包名 + 文件名前缀：确定、可复现，作用域仍然按文件隔开，
+       * 也不会跟宿主或别的插件撞。
+       */
+      cssModules: { pattern: 'dshmkt-[name]_[local]' },
       minify: true,
     })
     const classMap: Record<string, string> = {}
-    for (const [local, exported] of Object.entries(exports ?? {})) classMap[local] = exported.name
+    // 按 key 排序：lightningcss 返回的 exports 遍历顺序不稳定，直接写出去会让
+    // 同一份源码每次构建产出不同顺序的类名表 —— 又是一堆纯噪音的 diff
+    for (const [local, exported] of Object.entries(exports ?? {}).sort(([a], [b]) => a.localeCompare(b))) {
+      classMap[local] = exported.name
+    }
     const tagId = `${ID}/${basename(file)}`
     return [
       `const css = ${JSON.stringify(code.toString())};`,
