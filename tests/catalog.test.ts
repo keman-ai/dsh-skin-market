@@ -36,6 +36,44 @@ test('安装 spec 优先 npm 包名，没有才从仓库地址推 github:', () =
   assert.equal(neither?.installSpec, undefined)
 })
 
+test('每条可装的都带上来源类型与手动命令 —— 界面据此换话术', () => {
+  const npm = normalizeEntry({ skinId: 's', slug: 'a', packageName: 'dsh-cool-skin' })
+  assert.equal(npm?.installKind, 'npm')
+  assert.equal(npm?.installCommand, 'dsh plugin --profile web add -w dsh-cool-skin')
+
+  const git = normalizeEntry({ skinId: 's', slug: 'b', repoUrl: 'https://github.com/owner/repo' })
+  assert.equal(git?.installKind, 'github')
+
+  const tarball = normalizeEntry({
+    skinId: 's', slug: 'c',
+    installSpec: 'https://github.com/o/r/releases/download/v1/dsh-cool-0.1.0.tgz',
+  })
+  assert.equal(tarball?.installKind, 'tarball')
+
+  // 不可装的条目 kind 也一并缺席：两者同生同灭，界面不必分别判空。
+  const none = normalizeEntry({ skinId: 's', slug: 'd' })
+  assert.equal(none?.installKind, undefined)
+  assert.equal(none?.installCommand, undefined)
+})
+
+test('🔴 monorepo 的仓库地址不再被硬推成「装整个仓库」', () => {
+  // 21 个皮肤合并成一个仓之后，repoUrl 指向子目录是常态。旧的正则会把它
+  // 推成 `github:org/skins`，用户等完一次 clone 才在挂载那步失败。
+  const entry = normalizeEntry({
+    skinId: 's', slug: 'niulai',
+    repoUrl: 'https://github.com/keman-ai/skins/tree/main/packages/niulai',
+  })
+  assert.equal(entry?.installSpec, undefined)
+  assert.equal(entry?.installKind, undefined)
+})
+
+test('🔴 harness 自己的包换成 github: 写法也挡得住', () => {
+  // 旧的 safeSpec 对整条 spec 做前缀匹配，`github:` 剥掉后剩 `deepseek-ai/dsh-base`，
+  // 不以保留名开头，于是整条溜过去。判定必须落在推导出的包名上。
+  const entry = normalizeEntry({ skinId: 's', slug: 'x', packageName: 'github:deepseek-ai/dsh-base' })
+  assert.equal(entry?.installSpec, undefined)
+})
+
 test('作者既可以是字符串也可以是对象', () => {
   assert.equal(normalizeEntry({ skinId: 's', slug: 'x', author: 'someone' })?.author, 'someone')
   const rich = normalizeEntry({

@@ -10,6 +10,7 @@ import type { Context } from '@deepseek-ai/cordis'
 import { Catalog, DEFAULT_CATALOG_ORIGIN } from './catalog.ts'
 import { InstallFailure, allowBuilds, getLastLog, install, pnpmVersion, uninstall } from './installer.ts'
 import { isWritable, listInstalled, profileDirOf } from './profile.ts'
+import { classifySpec } from './spec.ts'
 import type { Diagnostics, DiagnosticRow, InstallEvent } from './types.ts'
 
 export { Catalog, DEFAULT_CATALOG_ORIGIN } from './catalog.ts'
@@ -284,11 +285,32 @@ export function apply(ctx: Context, config: Config = {}): void {
         if (entry === undefined) {
           throw new InstallFailure('SPEC_NOT_IN_CATALOG', `${spec} 不在集市目录里`)
         }
+        /*
+         * 授权只对 git 源成立。
+         *
+         * npm 包和 tarball 装的是发布物，构建在作者那边就做完了 —— 它们撞上
+         * BUILD_SCRIPT_BLOCKED 只可能是包本身有毛病（漏了构建产物、files 配错），
+         * 让用户授权「在本机执行这个包的脚本」既解决不了问题，又白白让他承担了风险。
+         *
+         * 顺带堵掉一个具体的坑：tarball 的裸名推导会得到 `dsh-niulai-0.1.0.tgz`，
+         * 拿它去写 allowBuilds 是授权了一个不存在的依赖名，重试必然再失败一次。
+         */
+        const info = classifySpec(spec)
+        if (info === undefined) {
+          throw new InstallFailure('SPEC_NOT_IN_CATALOG', `${spec} 不是一条可安装的 spec`)
+        }
+        if (!info.buildsFromSource || info.bareName === undefined) {
+          throw new InstallFailure(
+            'BUILD_SCRIPT_BLOCKED',
+            `${spec} 装的是预构建的发布物，不需要、也不应该授权构建脚本。`,
+            '装不上多半是这个包自己有问题（缺构建产物，或者 package.json 的 files 配错了），'
+            + '授权执行它的脚本解决不了，建议向作者反馈。',
+          )
+        }
         // 真实包名要装完才知道，而授权必须发生在装之前 —— 用 spec 的裸名授权，
         // pnpm 的 allowBuilds 按依赖名匹配，git 源的裸名与之一致。
-        const bare = spec.replace(/^github:/, '').split('/').pop()?.split('#')[0] ?? spec
-        await allowBuilds(dir, bare)
-        emit({ type: 'log', line: `✓ 已授权 ${bare} 运行构建脚本，正在重试安装` })
+        await allowBuilds(dir, info.bareName)
+        emit({ type: 'log', line: `✓ 已授权 ${info.bareName} 运行构建脚本，正在重试安装` })
         await install(dir, spec, emit)
         reportInstalled(ctx, catalog, entry.skinId)
       }),

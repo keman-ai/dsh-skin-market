@@ -3,6 +3,10 @@
  * 上游字段有变化时，只有 catalog.ts 的归一化需要改。
  */
 
+import type { SpecKind } from './spec.ts'
+
+export type { SpecKind } from './spec.ts'
+
 /** 目录里的一条皮肤。变体已展平：一个仓库带多套皮肤时，每套是独立一条。 */
 export interface SkinEntry {
   /** 集市侧的稳定 id。 */
@@ -30,10 +34,20 @@ export interface SkinEntry {
   /** 源码仓库。 */
   readonly repoUrl?: string
   /**
-   * 安装用的确切 spec（npm 包名，或 `github:owner/repo#sha`）。
+   * 安装用的确切 spec（npm 包名、`github:owner/repo#sha`，或 .tgz 的 https 地址）。
    * 缺失表示这条只能看不能装 —— UI 据此禁用安装按钮，而不是装了才失败。
    */
   readonly installSpec?: string
+  /**
+   * 这条 spec 的来源类型。与 `installSpec` 同生同灭：能装就一定有 kind。
+   *
+   * 界面按它决定说什么、给不给「授权重试」的出口 —— git 源要 clone 整个仓库并在本机
+   * 构建，npm 与 tarball 是拿现成的发布物，两者的等待时间和风险不是一回事，
+   * 不该用同一套话术糊过去。
+   */
+  readonly installKind?: SpecKind
+  /** 手动安装时该敲的完整命令，供「复制命令」用。 */
+  readonly installCommand?: string
   /** 安装成功次数，热度排序用。 */
   readonly installCount: number
 }

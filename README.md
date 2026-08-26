@@ -57,6 +57,25 @@ dsh plugin --profile web remove dsh-skin-market
 
 插件自身只有一个运行时依赖：[`yaml`](https://www.npmjs.com/package/yaml)，用来读写 profile 的 patch 文件。
 
+## 三种安装来源
+
+`pnpm add` 吃三种 spec，装出来的东西一样，代价差得很远。市场按来源在卡片上打一个虚线徽章，并把等待时间与风险写进它的悬停说明——**在点下去之前**，而不是等三分钟后弹一个授权框：
+
+| 徽章 | spec 形态 | 下载 | 要在你机器上构建吗 |
+|---|---|---|---|
+| **npm** | `dsh-niulai`、`@scope/name@^1.0.0` | registry tarball，秒级 | 不用，发布物已构建 |
+| **预构建包** | `https://…/dsh-niulai-0.1.0.tgz` | 一个 .tgz，秒级 | 不用，打包时已构建 |
+| **源码构建** | `github:owner/repo#ref` | git clone 整个仓库，几十秒到几分钟 | **要**，且可能请求授权执行构建脚本 |
+
+由此带来的两处行为差异：
+
+- **「授权并重试」只出现在源码构建的失败上。** npm 包和 tarball 装的是发布物，它们报 `BUILD_SCRIPT_BLOCKED` 只说明包自己有毛病（漏了构建产物、`files` 配错），授权执行它的脚本解决不了问题，却让用户白白承担了在沙箱外跑第三方代码的风险。
+- **任何失败都给「复制安装命令」。** 终端里 pnpm 有 TTY，进度看得见，授权与否也由用户自己决定。tarball 来源的 URL 长到没法照着敲，这颗按钮对它几乎是唯一的手动路径。
+
+安全上，三种来源都要先命中集市目录（不代装未收录的包），tarball 还额外要求 `https` 且下载主机在白名单内（GitHub Release / codeload / npm registry）——目录白名单挡的是「没收录的包」，挡不住「收录了但地址被改写」。
+
+指向仓库子目录的地址（`github.com/org/skins/tree/main/packages/niulai`）一律判为不可装：pnpm 没有「从 git 仓库子目录安装」这回事，硬推出来的 spec 会把整个 monorepo 当一个包装进 profile。皮肤收在 monorepo 里的作者，请登记 npm 包名或 Release tarball 作为 `installSpec`。
+
 ## 装完为什么不用重启
 
 装一个皮肤时，插件把该皮肤包声明的那层 patch 内联进 **profile 的 `cordis.patch.yml`**（用户层），而不是 `dsh plugin` 用的 `dsh.profile.bundles`。用户层被 app-boot 的 `watchUserPatches` 持续监视，写完约一秒内 Loader 树就事务式热重组，新插件的 host 半直接挂上；浏览器侧刷新页面即可加载它的 bundle。

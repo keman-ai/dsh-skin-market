@@ -235,6 +235,16 @@
   padding: 2px 8px;
 }
 
+/*
+ * 来源徽章。刻意比分类标签更轻（虚线框、无实边），它是给愿意留意的人看的补充信息，
+ * 不该跟皮肤自己的分类抢注意力 —— 大多数用户只需要知道「点了要等多久」，
+ * 而那句话在 title 里。
+ */
+.kind {
+  border-style: dashed;
+  white-space: nowrap;
+}
+
 .ghost {
   appearance: none;
   cursor: pointer;

@@ -7,6 +7,7 @@
 
 import { readFile } from 'node:fs/promises'
 import { fileURLToPath } from 'node:url'
+import { classifySpec, installCommandFor } from './spec.ts'
 import type { CatalogPage, SkinEntry } from './types.ts'
 
 /**
@@ -66,11 +67,36 @@ const str = (value: unknown): string | undefined => (
 )
 const num = (value: unknown): number => (typeof value === 'number' && Number.isFinite(value) ? value : 0)
 
-/** 从仓库地址推 `github:owner/repo`，作为没有 npm 包名时的安装 spec。 */
+/**
+ * 从仓库地址推 `github:owner/repo`，作为没有 npm 包名时的安装 spec。
+ *
+ * 🔴 <b>只认恰好指向仓库根的地址</b>。owner/repo 之后还有路径段，说明这条 repoUrl
+ * 指的是仓库里的某个位置 —— monorepo 把多个皮肤收进一个仓之后，
+ * `github.com/org/skins/tree/main/packages/niulai` 正是常态。
+ *
+ * 而 pnpm 没有「从 git 仓库的子目录安装」这回事：硬推出来的 `github:org/skins`
+ * 会把整个 monorepo 当一个包装进 profile，用户等完一次 clone，再在挂载那步
+ * 以 NOT_A_BUNDLE 回滚。这种条目应当从一开始就标成「不可装」，
+ * 让作者去补一个真正的 installSpec（npm 包名或 Release tarball）。
+ *
+ * @param repoUrl - 集市登记的仓库地址。
+ * @returns 安装 spec；不是仓库根地址时 undefined。
+ */
 function githubSpecOf(repoUrl: string | undefined): string | undefined {
   if (repoUrl === undefined) return undefined
-  const match = /github\.com\/([\w.-]+)\/([\w.-]+?)(?:\.git)?(?:[/#?].*)?$/.exec(repoUrl)
-  return match === null ? undefined : `github:${match[1]}/${match[2]}`
+  let url: URL
+  try {
+    url = new URL(repoUrl)
+  } catch {
+    return undefined
+  }
+  if (url.hostname !== 'github.com') return undefined
+  const segments = url.pathname.replace(/^\/+|\/+$/g, '').split('/')
+  if (segments.length !== 2) return undefined
+  const owner = segments[0]
+  const repo = segments[1]?.replace(/\.git$/, '')
+  if (owner === undefined || owner === '' || repo === undefined || repo === '') return undefined
+  return `github:${owner}/${repo}`
 }
 
 /** 日期归一到 YYYY-MM-DD；上游给什么格式都不让它把卡片弄崩。 */
@@ -118,19 +144,6 @@ function tagsOf(row: Record<string, unknown>): readonly string[] {
 }
 
 /**
- * harness 自己的包不是皮肤。目录里出现这种 spec 只可能是元数据填错
- * （线上就有一条把 packageName 填成 @deepseek-ai/dsh-client-ui-conversation 的），
- * 照着装会把宿主自己的包塞进 profile —— 宁可标成"不可装"，也不能让一条脏数据动用户的环境。
- * @param spec - 推导出来的安装 spec。
- * @returns 可用的 spec；判定为不该装时 undefined。
- */
-function safeSpec(spec: string | undefined): string | undefined {
-  if (spec === undefined) return undefined
-  const bare = spec.replace(/^(github|npm|file|link):/, '')
-  return bare.startsWith('@deepseek-ai/') || bare.startsWith('dsh-base') ? undefined : spec
-}
-
-/**
  * 从集市给的整条安装命令里取出 spec。
  *
  * 形如 `dsh plugin --profile web add -w github:owner/repo`。从末尾往回找第一个
@@ -172,7 +185,10 @@ export function normalizeEntry(raw: unknown): SkinEntry | undefined {
   // 填成了 harness 自己的包（`@deepseek-ai/dsh-client-ui-conversation`，多半是想表达
   // "我覆盖了这个包"），而同一条的 installCommand 是对的。安装命令是作者写给人照着敲的，
   // 填错了自己先发现；packageName 只是一个没人验证的元数据字段。
-  const installSpec = safeSpec(str(row.installSpec)
+  //
+  // 分类和安全校验都收在 classifySpec 里：认不出、主机不在白名单、指向 monorepo
+  // 子目录、是 harness 自己的包，一律返回 undefined，这条就是「只能看不能装」。
+  const resolved = classifySpec(str(row.installSpec)
     ?? specFromCommand(str(row.installCommand))
     ?? str(row.packageName)
     ?? githubSpecOf(repoUrl))
@@ -194,7 +210,13 @@ export function normalizeEntry(raw: unknown): SkinEntry | undefined {
     starCount: num(row.starCount ?? row.stars),
     ...(releasedAt !== undefined ? { releasedAt } : {}),
     ...(repoUrl !== undefined ? { repoUrl } : {}),
-    ...(installSpec !== undefined ? { installSpec } : {}),
+    ...(resolved !== undefined
+      ? {
+        installSpec: resolved.spec,
+        installKind: resolved.kind,
+        installCommand: installCommandFor(resolved.spec),
+      }
+      : {}),
     installCount: num(row.installCount),
   }
 }
