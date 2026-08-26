@@ -11,13 +11,13 @@
 </p>
 
 <p align="center">
-  <a href="../../stargazers"><img src="https://img.shields.io/github/stars/keman-ai/dsh-skin-market?style=flat&label=Star&color=4D6BFE" alt="Stars"></a>
-  <a href="../../releases"><img src="https://img.shields.io/github/v/release/keman-ai/dsh-skin-market?style=flat&label=release&color=08C" alt="Latest release"></a>
+  <a href="https://github.com/keman-ai/dsh-skin-market"><img src="https://img.shields.io/github/stars/keman-ai/dsh-skin-market?style=flat&label=Star&color=4D6BFE" alt="Stars"></a>
+  <a href="https://github.com/keman-ai/dsh-skin-market/releases"><img src="https://img.shields.io/github/v/release/keman-ai/dsh-skin-market?style=flat&label=release&color=08C" alt="Latest release"></a>
   <a href="LICENSE"><img src="https://img.shields.io/badge/license-MIT-2EA44F?style=flat" alt="MIT License"></a>
 </p>
 
 <p align="center">
-  <a href="../../stargazers">
+  <a href="https://github.com/keman-ai/dsh-skin-market">
     <img src="https://img.shields.io/badge/%E5%A6%82%E6%9E%9C%E5%96%9C%E6%AC%A2-%E7%82%B9%E4%B8%AA%20Star%20%E2%AD%90-4D6BFE?style=for-the-badge&labelColor=24292f" alt="给个 Star">
   </a>
 </p>
@@ -159,5 +159,5 @@ pnpm test      # 单元测试
 ---
 
 <p align="center">
-  <sub>如果这个插件帮到了你，<a href="../../stargazers">给个 Star ⭐</a> 就是最好的支持。</sub>
+  <sub>如果这个插件帮到了你，<a href="https://github.com/keman-ai/dsh-skin-market">给个 Star ⭐</a> 就是最好的支持。</sub>
 </p>
