@@ -20,28 +20,32 @@
   <b>如果喜欢就给个 Star 鼓励我们一下吧</b>
 </p>
 
-<p align="center">
-  <img src="plugin.png" alt="设置 → 皮肤市场：发现页，搜索社区皮肤并一键安装" width="100%">
-</p>
-
 ## 三个页签
 
 <table>
   <tr>
-    <td width="33%" valign="top">
+    <td width="50%" valign="top">
+      <img src="plugin_list.png" alt="发现：搜索社区皮肤，卡片上标着来源与等待成本" width="100%">
+    </td>
+    <td width="50%" valign="top">
+      <img src="plugin_install.png" alt="已安装：启用 / 停用 / 卸载，读本机 profile" width="100%">
+    </td>
+  </tr>
+  <tr>
+    <td valign="top">
       <h3>发现</h3>
       <p>搜索、排序、一键安装。卡片上标着这套皮肤是<strong>预构建包</strong>还是<strong>源码构建</strong>——点下去要等几秒还是几分钟，在点之前就知道。</p>
     </td>
-    <td width="33%" valign="top">
+    <td valign="top">
       <h3>已安装</h3>
-      <p>版本、来源、启用 / 停用、卸载。读的是本机 profile，<strong>断网也能管</strong>；预览图也走本地，不额外联网。</p>
-    </td>
-    <td width="33%" valign="top">
-      <h3>诊断</h3>
-      <p>pnpm、profile 路径、集市连通性、上次安装的完整输出。装不上时先看这一屏，比截图有用得多。</p>
+      <p>版本、主题 id、<strong>启用 / 停用</strong>、卸载。读的是本机 profile，<strong>断网也能管</strong>；连预览图都走本地，不额外联网。</p>
     </td>
   </tr>
 </table>
+
+<p align="center">
+  <sub><b>诊断</b>　·　pnpm、profile 路径、集市连通性、上次安装的完整输出 —— 装不上时先看这一屏，比截图有用得多</sub>
+</p>
 
 > **本站官方皮肤的源码都在 [dsh-skin-pack](https://github.com/keman-ai/dsh-skin-pack)。**
 
