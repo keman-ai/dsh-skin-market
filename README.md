@@ -17,7 +17,13 @@
 </p>
 
 <p align="center">
-  <sub>装着顺手就点个 ⭐ —— 这是我们判断该不该继续做下去的唯一信号。</sub>
+  <a href="../../stargazers">
+    <img src="https://img.shields.io/badge/%E5%A6%82%E6%9E%9C%E5%96%9C%E6%AC%A2-%E7%82%B9%E4%B8%AA%20Star%20%E2%AD%90-4D6BFE?style=for-the-badge&labelColor=24292f" alt="给个 Star">
+  </a>
+</p>
+
+<p align="center">
+  <b>装一次，之后换皮肤不用再回终端</b>　·　Star 是我们判断该不该继续做下去的唯一信号
 </p>
 
 <p align="center">
