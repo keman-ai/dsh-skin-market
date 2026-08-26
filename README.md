@@ -1,7 +1,6 @@
 # dsh-skin-market
 
 [![Stars](https://img.shields.io/github/stars/keman-ai/dsh-skin-market?style=flat&label=Star&color=4D6BFE)](../../stargazers)
-[![npm](https://img.shields.io/npm/v/dsh-skin-market?style=flat&color=08C)](https://www.npmjs.com/package/dsh-skin-market)
 [![License](https://img.shields.io/badge/license-MIT-2EA44F?style=flat)](LICENSE)
 
 给 [DeepSeek Harness](https://github.com/deepseek-ai/deepseek-harness) 的皮肤市场插件：在设置里搜社区皮肤，点一下装上，刷新页面就换了皮。
