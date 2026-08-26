@@ -1,23 +1,49 @@
-# dsh-skin-market
+<h1 align="center">DSH Skin Market</h1>
 
-[![Stars](https://img.shields.io/github/stars/keman-ai/dsh-skin-market?style=flat&label=Star&color=4D6BFE)](../../stargazers)
-[![License](https://img.shields.io/badge/license-MIT-2EA44F?style=flat)](LICENSE)
+<p align="center">
+  <strong>在 <a href="https://github.com/deepseek-ai/deepseek-harness">DeepSeek Harness</a> 里搜皮肤、点一下装上。</strong><br>
+  装一次，之后换皮肤不用再回终端。
+</p>
 
-给 [DeepSeek Harness](https://github.com/deepseek-ai/deepseek-harness) 的皮肤市场插件：在设置里搜社区皮肤，点一下装上，刷新页面就换了皮。
+<p align="center">
+  <a href="https://dsh.a2hmarket.ai"><strong>dsh.a2hmarket.ai</strong></a>
+  —— 皮肤目录来自这里，免登录
+</p>
 
-皮肤目录来自 [dsh.a2hmarket.ai](https://dsh.a2hmarket.ai)，免登录。
-本站那 28 套官方皮肤的源码在 [dsh-skin-pack](https://github.com/keman-ai/dsh-skin-pack)。
+<p align="center">
+  <a href="../../stargazers"><img src="https://img.shields.io/github/stars/keman-ai/dsh-skin-market?style=flat&label=Star&color=4D6BFE" alt="Stars"></a>
+  <a href="../../releases"><img src="https://img.shields.io/github/v/release/keman-ai/dsh-skin-market?style=flat&label=release&color=08C" alt="Latest release"></a>
+  <a href="LICENSE"><img src="https://img.shields.io/badge/license-MIT-2EA44F?style=flat" alt="MIT License"></a>
+</p>
 
-> 装着顺手的话点个 ⭐ —— 这是我们判断该不该继续做下去的唯一信号。
+<p align="center">
+  <sub>装着顺手就点个 ⭐ —— 这是我们判断该不该继续做下去的唯一信号。</sub>
+</p>
 
-![设置 → 皮肤市场：发现页，搜索社区皮肤并一键安装](plugin.png)
+<p align="center">
+  <img src="plugin.png" alt="设置 → 皮肤市场：发现页，搜索社区皮肤并一键安装" width="100%">
+</p>
 
-```
-设置 → 皮肤市场
-├─ 发现      搜索 · 排序 · 一键安装
-├─ 已安装    版本 · 来源 · 卸载（读本机 profile，断网可用）
-└─ 诊断      pnpm · profile 路径 · 集市连通性 · 上次安装输出
-```
+## 三个页签
+
+<table>
+  <tr>
+    <td width="33%" valign="top">
+      <h3>发现</h3>
+      <p>搜索、排序、一键安装。卡片上标着这套皮肤是<strong>预构建包</strong>还是<strong>源码构建</strong>——点下去要等几秒还是几分钟，在点之前就知道。</p>
+    </td>
+    <td width="33%" valign="top">
+      <h3>已安装</h3>
+      <p>版本、来源、启用 / 停用、卸载。读的是本机 profile，<strong>断网也能管</strong>；预览图也走本地，不额外联网。</p>
+    </td>
+    <td width="33%" valign="top">
+      <h3>诊断</h3>
+      <p>pnpm、profile 路径、集市连通性、上次安装的完整输出。装不上时先看这一屏，比截图有用得多。</p>
+    </td>
+  </tr>
+</table>
+
+> **本站那 28 套官方皮肤的源码在 [dsh-skin-pack](https://github.com/keman-ai/dsh-skin-pack)。**
 
 ## 安装
 
@@ -132,9 +158,15 @@ pnpm test      # 单元测试
 
 ## 相关
 
-[dsh.a2hmarket.ai](https://dsh.a2hmarket.ai) —— 皮肤目录站，作者在这里上架。本插件的目录就是从这里拉的。
+| | |
+|---|---|
+| [dsh.a2hmarket.ai](https://dsh.a2hmarket.ai) | 皮肤目录站，作者在这里上架。本插件的目录就是从这里拉的 |
+| [dsh-skin-pack](https://github.com/keman-ai/dsh-skin-pack) | 28 套官方皮肤的源码，一个仓库全在里面 |
+| [dsh-skin-dev](https://github.com/keman-ai/dsh-skin-dev) | 想自己做一套皮肤，从这里开始 |
 
-![DSH 皮肤集市：社区皮肤一览，看效果、读说明、复制一行命令装上](market.png)
+<p align="center">
+  <img src="market.png" alt="DSH 皮肤集市：社区皮肤一览，看效果、读说明、复制一行命令装上" width="100%">
+</p>
 
 ## Star 趋势
 
@@ -143,3 +175,9 @@ pnpm test      # 单元测试
 ## 许可
 
 [MIT](LICENSE) © 2026 Science Roam Limited
+
+---
+
+<p align="center">
+  <sub>如果这个插件帮到了你，<a href="../../stargazers">给个 Star ⭐</a> 就是最好的支持。</sub>
+</p>
