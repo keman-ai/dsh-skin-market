@@ -1,8 +1,15 @@
 # dsh-skin-market
 
+[![Stars](https://img.shields.io/github/stars/keman-ai/dsh-skin-market?style=flat&label=Star&color=4D6BFE)](../../stargazers)
+[![npm](https://img.shields.io/npm/v/dsh-skin-market?style=flat&color=08C)](https://www.npmjs.com/package/dsh-skin-market)
+[![License](https://img.shields.io/badge/license-MIT-2EA44F?style=flat)](LICENSE)
+
 给 [DeepSeek Harness](https://github.com/deepseek-ai/deepseek-harness) 的皮肤市场插件：在设置里搜社区皮肤，点一下装上，刷新页面就换了皮。
 
 皮肤目录来自 [dsh.a2hmarket.ai](https://dsh.a2hmarket.ai)，免登录。
+本站那 28 套官方皮肤的源码在 [dsh-skin-pack](https://github.com/keman-ai/dsh-skin-pack)。
+
+> 装着顺手的话点个 ⭐ —— 这是我们判断该不该继续做下去的唯一信号。
 
 ![设置 → 皮肤市场：发现页，搜索社区皮肤并一键安装](plugin.png)
 
