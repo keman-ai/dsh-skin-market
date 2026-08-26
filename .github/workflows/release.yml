@@ -23,9 +23,9 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      # 不写 version：action 会同时读 package.json 的 packageManager，
+      # 两处都指定它直接报 Multiple versions of pnpm specified
       - uses: pnpm/action-setup@v4
-        with:
-          version: 8
 
       - uses: actions/setup-node@v4
         with:
