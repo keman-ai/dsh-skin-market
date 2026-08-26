@@ -58,7 +58,7 @@ dsh plugin --profile web remove dsh-skin-market
 | **profile** | 必须是 **web** profile | headless / tui 组合里没有 `webServer`，插件不会激活 |
 | **Node.js** | `>= 20`（实测 24） | dsh 自己的要求，插件不额外抬高 |
 | **pnpm** | 在 `PATH` 上（实测 8.15 与 10） | 只影响安装。诊断页标红，安装按钮明确报错，浏览和搜索照常 |
-| **git** | 在 `PATH` 上 | 目录里多数皮肤是 `github:owner/repo` 源，pnpm 靠 git 拉 |
+| **git** | 装 GitHub 源皮肤才要 | 目录里多数皮肤已改用 Release tarball（不需要 git），只有少数仍是 `github:owner/repo` 源 |
 | **网络** | `dsh.a2hmarket.ai`；装 GitHub 源皮肤还要 `github.com` | 集市连不上会回落到缓存 / 随包快照并在页面说明 |
 | **浏览器** | 装皮肤要求**本机直连**（loopback） | 远程访问时能逛能搜，安装被拒 |
 
