@@ -136,6 +136,10 @@ pnpm test      # 单元测试
 
 ![DSH 皮肤集市：社区皮肤一览，看效果、读说明、复制一行命令装上](market.png)
 
+## Star 趋势
+
+[![Star History Chart](https://api.star-history.com/svg?repos=keman-ai/dsh-skin-market&type=Date)](https://star-history.com/#keman-ai/dsh-skin-market&Date)
+
 ## 许可
 
 [MIT](LICENSE) © 2026 Science Roam Limited

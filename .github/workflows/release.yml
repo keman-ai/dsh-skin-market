@@ -1,0 +1,60 @@
+name: Build & Release
+
+# 这个仓与 dsh-skin-pack 不同：用户装它走 github:keman-ai/dsh-skin-market（git 源），
+# 所以 lib/ 必须提交进仓库、CI 也不负责分发。这里发 Release 是为了两件事：
+#   · 给想固定版本的人一个 tarball（比 clone 整个仓库快，也不触发构建脚本授权）
+#   · 让版本号有一个可追溯的标记 —— 之前改了什么、什么时候发的
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write # 建 Release 要写权限
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 8
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - run: pnpm install --frozen-lockfile
+
+      - name: Type check
+        run: pnpm check
+
+      - name: Test
+        run: pnpm test
+
+      - name: Build
+        run: pnpm build
+
+      # lib/ 是提交进仓库的（git 源安装依赖它）。构建后若与提交的版本不一致，
+      # 说明有人改了源码没跟着提交产物 —— 那样用户装到的就是旧代码，必须拦下
+      - name: Assert lib/ is up to date
+        run: |
+          if ! git diff --quiet -- lib; then
+            echo "::error::lib/ 与源码不同步。本地跑 pnpm build 并把 lib/ 一并提交"
+            git diff --stat -- lib
+            exit 1
+          fi
+
+      - name: Release if version is new
+        if: github.event_name != 'pull_request'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: node scripts/release.mjs
