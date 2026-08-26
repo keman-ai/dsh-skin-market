@@ -67,6 +67,10 @@ export interface InstalledPanelProps {
   readonly states: ReadonlyMap<string, CardState>
   readonly t: Translate
   readonly onUninstall: (packageName: string) => void
+  /** 当前生效的主题 id；用来标出哪一套是启用中的。 */
+  readonly activeThemeId?: string
+  /** 启用某套皮肤。主题是单选的，所以切过去就等于把别的换下来。 */
+  readonly onEnable: (themeId: string) => void
 }
 
 /**
@@ -74,7 +78,9 @@ export interface InstalledPanelProps {
  * @param props - 列表、状态与回调。
  * @returns 面板元素。
  */
-export function InstalledPanel({ items, states, t, onUninstall }: InstalledPanelProps): JSX.Element {
+export function InstalledPanel(
+  { items, states, t, onUninstall, activeThemeId, onEnable }: InstalledPanelProps,
+): JSX.Element {
   if (items.length === 0) {
     return (
       <div className={styles.empty}>
@@ -85,20 +91,45 @@ export function InstalledPanel({ items, states, t, onUninstall }: InstalledPanel
   }
 
   return (
-    <div className={styles.list}>
+    <div className={styles.installedList}>
       {items.map((item) => {
         const state = states.get(item.packageName) ?? { kind: 'idle' as const }
+        const busy = state.kind === 'working'
+        const active = item.themeId !== undefined && item.themeId === activeThemeId
         return (
-          <article className={styles.card} key={item.packageName}>
-            <div className={styles.icon} aria-hidden="true">◆</div>
-            <h3 className={styles.name}>{item.packageName}</h3>
-            <p className={styles.meta}>
-              {item.version !== undefined && <span>v{item.version}</span>}
-              {item.spec !== undefined && <><span>·</span><span>{item.spec}</span></>}
-              {item.disabled && <><span>·</span><span>{t('installed.disabled')}</span></>}
-            </p>
-            <div className={styles.foot}>
-              <span className={styles.spacer} />
+          <article className={styles.installedRow} key={item.packageName}>
+            {/*
+              图标走 host 的本地路由，不用集市的 iconUrl —— 这一屏的定位是断网也能管，
+              图标不该是唯一要联网的东西。没有预览图的包回 404，onError 换回占位符。
+            */}
+            <img
+              className={styles.installedIcon}
+              src={`/skin-market/api/icon?package=${encodeURIComponent(item.packageName)}`}
+              alt=""
+              loading="lazy"
+              onError={(event) => { event.currentTarget.classList.add(styles.iconMissing ?? '') }}
+            />
+            <div className={styles.installedMain}>
+              {/*
+                完整的安装地址挂在 title 里，不占一行。
+                它是调试信息 —— 想看的人在诊断页能看到完整输出，
+                而常驻显示一条带横向滚动条的长 URL 只是把这一行弄脏。
+              */}
+              <h3
+                className={styles.installedName}
+                title={item.spec !== undefined ? `${item.packageName}\n${item.spec}` : item.packageName}
+              >
+                {item.packageName}
+              </h3>
+              <p className={styles.installedMeta}>
+                {item.version !== undefined && <span>v{item.version}</span>}
+                {item.themeId !== undefined && <><span>·</span><span>{item.themeId}</span></>}
+                {active && <><span>·</span><span className={styles.activeMark}>{t('installed.active')}</span></>}
+                {item.disabled && <><span>·</span><span>{t('installed.disabled')}</span></>}
+              </p>
+            </div>
+
+            <div className={styles.installedActions}>
               {state.kind === 'done'
                 ? (
                   <button
@@ -110,17 +141,35 @@ export function InstalledPanel({ items, states, t, onUninstall }: InstalledPanel
                   </button>
                 )
                 : (
-                  <button
-                    className={styles.ghost}
-                    type="button"
-                    disabled={state.kind === 'working'}
-                    onClick={() => { onUninstall(item.packageName) }}
-                  >
-                    {t(state.kind === 'working' ? 'card.uninstalling' : 'card.uninstall')}
-                  </button>
+                  <>
+                    {/*
+                      读不到 themeId 的包不给启用按钮：那是没按规范写 skin.json 的皮肤，
+                      猜一个 id 去 setTheme 只会切不过去，还查不出原因
+                    */}
+                    {item.themeId !== undefined && (
+                      <button
+                        className={active ? styles.ghost : styles.primary}
+                        type="button"
+                        disabled={busy}
+                        // 停用 = 切回跟随系统。皮肤仍然装着，只是不再生效
+                        onClick={() => { onEnable(active ? 'system' : item.themeId!) }}
+                      >
+                        {t(active ? 'installed.disable' : 'installed.enable')}
+                      </button>
+                    )}
+                    <button
+                      className={styles.ghost}
+                      type="button"
+                      disabled={busy}
+                      onClick={() => { onUninstall(item.packageName) }}
+                    >
+                      {t(busy ? 'card.uninstalling' : 'card.uninstall')}
+                    </button>
+                  </>
                 )}
             </div>
-            {state.kind === 'working' && state.log.length > 0 && (
+
+            {busy && state.log.length > 0 && (
               <pre className={styles.log}>{state.log.join('\n')}</pre>
             )}
             {state.kind === 'error' && (

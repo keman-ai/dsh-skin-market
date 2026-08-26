@@ -187,6 +187,7 @@ export async function listInstalled(profileDir: string): Promise<InstalledSkin[]
       disabled: state.disabled,
       ...(deps[packageName] !== undefined ? { spec: deps[packageName] } : {}),
       ...(await readVersion(profileDir, packageName)),
+      ...(await readThemeId(profileDir, packageName)),
     })
   }
   return out.sort((a, b) => a.packageName.localeCompare(b.packageName))
@@ -227,6 +228,65 @@ async function readVersion(profileDir: string, packageName: string): Promise<{ v
     const raw = await readFile(join(profileDir, 'node_modules', packageName, 'package.json'), 'utf8')
     const parsed = JSON.parse(raw) as { version?: string }
     return parsed.version === undefined ? {} : { version: parsed.version }
+  } catch {
+    return {}
+  }
+}
+
+/**
+ * 解析某个已装皮肤的预览图绝对路径。
+ *
+ * 🔴 路径来自包自己的 skin.json，但<b>必须验证解析结果仍在包目录内</b> ——
+ * 那个字段是包作者写的，`../../..` 之类的值会让这个路由变成任意文件读取。
+ * 校验用 resolve 后的前缀比对，不是字符串里找 `..`（`%2e%2e` 那类编码绕得过去）。
+ *
+ * @param profileDir - profile 目录。
+ * @param packageName - 包名，调用方必须先确认它在已装列表里。
+ * @returns 预览图绝对路径；没有或越界时 undefined。
+ */
+export async function resolveIconPath(
+  profileDir: string, packageName: string,
+): Promise<string | undefined> {
+  // 包名只允许 npm 的合法形态，挡掉 ../ 这类拼进目录的写法
+  if (!/^(?:@[\w.-]+\/)?[\w.-]+$/.test(packageName)) return undefined
+  const packageDir = join(profileDir, 'node_modules', packageName)
+  try {
+    const skin = JSON.parse(
+      await readFile(join(packageDir, 'skin.json'), 'utf8'),
+    ) as { preview?: Record<string, string> }
+    const candidates = Object.values(skin.preview ?? {}).filter(v => typeof v === 'string')
+    for (const relative of candidates) {
+      const full = resolve(packageDir, relative)
+      // 必须仍在包目录内：作者写 ../../ 也不能读到别处
+      if (!full.startsWith(resolve(packageDir) + '/')) continue
+      try {
+        await access(full, constants.R_OK)
+        return full
+      } catch {
+        // 声明了但文件不在，试下一个
+      }
+    }
+  } catch {
+    // 没有 skin.json 或读不出来 —— 没有图标而已
+  }
+  return undefined
+}
+
+/**
+ * 从包里的 skin.json 读它注册的主题 id。
+ *
+ * 皮肤的三处 id（skin.json#id、THEME_ID、patch 的 insert.id）按约定必须一致，
+ * 所以读 skin.json 就够。没有这个文件的包（不是按规范做的皮肤）返回空，
+ * 界面据此不显示启用按钮 —— 而不是猜一个 id 去 setTheme，切不过去还查不出原因。
+ * @param profileDir - profile 目录。
+ * @param packageName - 包名。
+ * @returns 主题 id；读不到时空对象。
+ */
+async function readThemeId(profileDir: string, packageName: string): Promise<{ themeId?: string }> {
+  try {
+    const raw = await readFile(join(profileDir, 'node_modules', packageName, 'skin.json'), 'utf8')
+    const parsed = JSON.parse(raw) as { id?: string }
+    return typeof parsed.id === 'string' && parsed.id !== '' ? { themeId: parsed.id } : {}
   } catch {
     return {}
   }

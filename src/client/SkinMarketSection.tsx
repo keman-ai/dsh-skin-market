@@ -59,6 +59,9 @@ export function SkinMarketSection({ api, t, version, appearance }: SkinMarketInj
   const [diagnostics, setDiagnostics] = useState<Diagnostics | undefined>(undefined)
   const [states, setStates] = useState<ReadonlyMap<string, CardState>>(new Map())
   const [themes, setThemes] = useState<readonly AppearanceOption[]>(() => appearance?.options() ?? [])
+  const builtinThemes = themes.filter(option => option.builtin)
+  /** 当前生效的主题 id。已安装列表据此标出哪一套是启用中的。 */
+  const activeThemeId = themes.find(option => option.active && !option.builtin)?.id
 
   // 皮肤的 bundle 是异步加载的，主题会在页面起来之后才注册进来。
   useEffect(() => {
@@ -257,10 +260,22 @@ export function SkinMarketSection({ api, t, version, appearance }: SkinMarketInj
 
       {tab === 'installed' && (
         <>
-          {appearance !== undefined && themes.length > 0 && (
-            <AppearancePicker options={themes} t={t} onSelect={appearance.select} />
+          {/*
+            外观行只列 dsh 自带的三个（跟随系统 / 浅色 / 深色）。
+            第三方皮肤改在「已安装」里用启用按钮切 —— 皮肤多起来之后，
+            这一行会被一排 id 撑爆，而且那些 id 对用户没有意义。
+          */}
+          {appearance !== undefined && builtinThemes.length > 0 && (
+            <AppearancePicker options={builtinThemes} t={t} onSelect={appearance.select} />
           )}
-          <InstalledPanel items={installed} states={states} t={t} onUninstall={onUninstallName} />
+          <InstalledPanel
+            items={installed}
+            states={states}
+            t={t}
+            onUninstall={onUninstallName}
+            {...(activeThemeId !== undefined ? { activeThemeId } : {})}
+            onEnable={(id) => { appearance?.select(id) }}
+          />
         </>
       )}
 

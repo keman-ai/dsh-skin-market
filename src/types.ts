@@ -72,6 +72,14 @@ export interface InstalledSkin {
   readonly version?: string
   /** profile 的 patch 层里那一行的 id。 */
   readonly rowId: string
+  /**
+   * 这个皮肤注册的主题 id（取自包里的 skin.json#id）。
+   *
+   * 启用按钮要用它去 setTheme —— 包名与主题 id 并不相等
+   * （dsh-deepseek-twin-whale 的主题 id 是 twinwhale），所以必须从包里读，
+   * 不能从包名推。读不到就没有启用按钮，只能卸载。
+   */
+  readonly themeId?: string
   /** 依赖 spec（npm 版本号或 git 地址）。 */
   readonly spec?: string
   /** patch 行是否被停用。 */

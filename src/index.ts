@@ -6,10 +6,11 @@
  */
 
 import type { IncomingMessage, ServerResponse } from 'node:http'
+import { readFile } from 'node:fs/promises'
 import type { Context } from '@deepseek-ai/cordis'
 import { Catalog, DEFAULT_CATALOG_ORIGIN } from './catalog.ts'
 import { InstallFailure, allowBuilds, getLastLog, install, pnpmVersion, uninstall } from './installer.ts'
-import { isWritable, listInstalled, profileDirOf } from './profile.ts'
+import { isWritable, listInstalled, profileDirOf, resolveIconPath } from './profile.ts'
 import { classifySpec } from './spec.ts'
 import type { Diagnostics, DiagnosticRow, InstallEvent } from './types.ts'
 
@@ -55,6 +56,17 @@ function reportInstalled(ctx: Context, catalog: Catalog, skinId: string): void {
       ctx.logger.debug('[skin-market] 装机量回报没记上（skinId=%s），不影响安装结果', skinId)
     }
   })
+}
+
+/** 预览图的 content-type。只认这几种，不猜。 */
+const IMAGE_TYPES: Record<string, string> = {
+  webp: 'image/webp',
+  png: 'image/png',
+  jpg: 'image/jpeg',
+  jpeg: 'image/jpeg',
+  avif: 'image/avif',
+  gif: 'image/gif',
+  svg: 'image/svg+xml',
 }
 
 /** JSON 响应。 */
@@ -245,6 +257,45 @@ export function apply(ctx: Context, config: Config = {}): void {
       path: `${API_PREFIX}/installed`,
       handler: async (_req, res) => {
         json(res, 200, { items: profileDir === undefined ? [] : await listInstalled(profileDir) })
+      },
+    },
+    {
+      // 已装皮肤的预览图。走本地文件而不是集市的 iconUrl：
+      // 「已安装」这一屏的定位就是断网也能管，图标不该是唯一要联网的东西。
+      path: `${API_PREFIX}/icon`,
+      handler: async (req, res) => {
+        const url = new URL(req.url ?? '/', 'http://x')
+        const packageName = url.searchParams.get('package') ?? ''
+        if (profileDir === undefined || packageName === '') {
+          res.writeHead(404).end()
+          return
+        }
+        // 只给已装的包出图：包名先过一遍已装列表，
+        // 免得这个路由变成「拿包名探测 node_modules 里有什么」的工具
+        const installed = await listInstalled(profileDir)
+        if (!installed.some(row => row.packageName === packageName)) {
+          res.writeHead(404).end()
+          return
+        }
+        const file = await resolveIconPath(profileDir, packageName)
+        if (file === undefined) {
+          res.writeHead(404).end()
+          return
+        }
+        try {
+          const body = await readFile(file)
+          const ext = file.slice(file.lastIndexOf('.') + 1).toLowerCase()
+          res.writeHead(200, {
+            'content-type': IMAGE_TYPES[ext] ?? 'application/octet-stream',
+            'content-length': body.byteLength,
+            // 图片随包走，包不变图就不变；装新版本时包名相同但内容会变，
+            // 所以给一个短缓存而不是长缓存
+            'cache-control': 'private, max-age=300',
+          })
+          res.end(body)
+        } catch {
+          res.writeHead(404).end()
+        }
       },
     },
     {

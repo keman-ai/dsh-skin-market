@@ -27,9 +27,11 @@ jobs:
       # 两处都指定它直接报 Multiple versions of pnpm specified
       - uses: pnpm/action-setup@v4
 
+      # 跟开发机对齐。lib/ 是提交进仓库的，下面那道闸要逐字节比对构建产物 ——
+      # Node 大版本不同产出就可能不同，闸会变成误报
       - uses: actions/setup-node@v4
         with:
-          node-version: 22
+          node-version: 24
           cache: pnpm
 
       - run: pnpm install --frozen-lockfile

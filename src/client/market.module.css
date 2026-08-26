@@ -421,13 +421,10 @@
   display: flex;
   flex-wrap: wrap;
   gap: 8px;
-  /* 一个包可以注册几十个主题（中国传统色那种成对的 light/dark）。不限高的话
-     外观区块会把整页撑爆，下面的已安装列表滚到底也看不见。 */
-  max-height: 152px;
-  overflow-y: auto;
-  padding-right: 4px;
-  scrollbar-width: thin;
-  scrollbar-color: var(--dsw-alias-scrollbar-bg-l2) transparent;
+  /*
+   * 不再限高：第三方皮肤已经不列在这一行（改在「已安装」里点启用），
+   * 这里固定就是跟随系统 / 浅色 / 深色三个，撑不爆也不需要滚。
+   */
 }
 
 .cubes::-webkit-scrollbar { width: 8px; }
@@ -470,4 +467,90 @@
   margin: 9px 0 0;
   font-size: 12px;
   color: var(--dsw-alias-label-caption);
+}
+
+
+/* ── 已安装列表 ────────────────────────────────────────────────────────────
+   不复用发现页的卡片：那是等宽网格，而这里的内容宽度差异极大 —— 包名可能很长、
+   spec 是一整条 Release 地址。之前直接套 .card，长包名被挤成一列竖排的字。 */
+
+.installedList {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  /*
+   * 不设自己的高度上限，也不自己滚：外层 .list 已经是可滚动区域，
+   * 这里再套一层就成了嵌套的双滚动条 —— 又难看又难用。
+   */
+}
+
+.installedRow {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+  padding: 12px 14px;
+  border: 1px solid var(--dsw-alias-border-l2);
+  border-radius: 10px;
+  background: var(--dsw-alias-fill-l1);
+}
+
+/* min-width:0 是关键：flex 子项默认 min-width:auto，长内容会把整行顶宽 */
+/* 皮肤预览图。宽一点（16:10）而不是方形 —— 皮肤的封面本来就是整屏视觉，
+   裁成正方形反而看不出是哪一套。 */
+.installedIcon {
+  flex: 0 0 auto;
+  width: 72px;
+  height: 45px;
+  border-radius: 8px;
+  border: 1px solid var(--dsw-alias-border-l2);
+  background: var(--dsw-alias-bg-layer-2);
+  object-fit: cover;
+}
+
+/* 没有预览图的包：藏掉裂图，留一个同尺寸的空位，行高不跳 */
+.iconMissing {
+  object-fit: none;
+  color: transparent;
+}
+
+.installedMain {
+  flex: 1 1 260px;
+  min-width: 0;
+}
+
+.installedName {
+  margin: 0;
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--dsw-alias-label-primary);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.installedMeta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin: 2px 0 0;
+  font-size: 12px;
+  color: var(--dsw-alias-label-tertiary);
+}
+
+/* 生效中的那一套，用颜色点一下就够，不另起一块 badge */
+.activeMark { color: var(--dsw-alias-state-success-primary); }
+
+.installedActions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex: 0 0 auto;
+}
+
+/* 这一行的按钮比发现页的小一号：这里一行两颗，发现页一张卡一颗 */
+.installedActions .primary,
+.installedActions .ghost {
+  min-width: 0;
+  padding: 5px 14px;
 }
