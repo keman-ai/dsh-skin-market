@@ -1,4 +1,4 @@
-/** `settings.skinMarket` 命名空间的文案。中文是键集真源，英文按同一套键补齐。 */
+/** Copy for the `settings.skinMarket` namespace. Chinese is the source of truth for the key set; English mirrors the same keys. */
 
 export const zh = {
   'nav': '皮肤市场',
@@ -56,7 +56,7 @@ export const zh = {
   'diag.loading': '正在检测…',
 } satisfies Record<string, string>
 
-/** 本命名空间的键联合。 */
+/** Union of this namespace's keys. */
 export type SkinMarketKey = keyof typeof zh
 
 export const en = {

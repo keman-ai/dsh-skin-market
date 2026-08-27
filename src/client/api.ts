@@ -1,12 +1,12 @@
 /**
- * 浏览器侧的市场客户端：同源调 host 半的路由。
+ * Browser-side market client: same-origin calls to the host half's routes.
  *
- * 集市地址、缓存、白名单都在 host 那边，这里只关心把结果交给界面。
+ * The registry URL, caching and allowlist all live on the host side; this only hands results to the UI.
  */
 
 import type { CatalogPage, Diagnostics, InstallEvent, InstalledSkin } from '../types.ts'
 
-/** 与 host 半的 API_PREFIX 保持一致。 */
+/** Kept in sync with the host half's API_PREFIX. */
 const PREFIX = '/skin-market/api'
 
 async function getJson<T>(path: string): Promise<T> {
@@ -15,22 +15,22 @@ async function getJson<T>(path: string): Promise<T> {
   return await response.json() as T
 }
 
-/** 界面用到的全部后端动作。 */
+/** Every backend action the UI uses. */
 export interface MarketApi {
   catalog(query: { q: string; sort: string; page: number }): Promise<CatalogPage>
   installed(): Promise<readonly InstalledSkin[]>
   diagnostics(): Promise<Diagnostics>
-  /** 装一个包，过程事件逐条回调。真实包名由 host 从安装结果读出，随 done 事件回来。 */
+  /** Install a package, reporting progress events one by one. The real package name is read from the install result by the host and returned with the done event. */
   install(spec: string, onEvent: (event: InstallEvent) => void): Promise<void>
   uninstall(packageName: string, onEvent: (event: InstallEvent) => void): Promise<void>
-  /** 用户明确同意后：授权构建脚本并重试安装。 */
+  /** After explicit user consent: authorise build scripts and retry the install. */
   allowBuilds(spec: string, onEvent: (event: InstallEvent) => void): Promise<void>
 }
 
 /**
- * 消费一条 SSE：把 `data:` 行解析成事件推给调用方。
+ * Consume an SSE stream, parsing `data:` lines into events for the caller.
  *
- * 手写而不用 EventSource，因为这是 POST 且要带 body；EventSource 只能 GET。
+ * Hand-written rather than EventSource because this is a POST with a body; EventSource is GET-only.
  */
 async function stream(
   path: string, body: unknown, onEvent: (event: InstallEvent) => void,
@@ -41,7 +41,7 @@ async function stream(
     body: JSON.stringify(body),
   })
 
-  // 鉴权类失败在开流之前就回了 JSON，这时按普通错误处理。
+  // Auth failures return JSON before the stream opens; treat those as ordinary errors.
   const contentType = response.headers.get('content-type') ?? ''
   if (!contentType.includes('event-stream')) {
     const payload = await response.json().catch(() => ({})) as { code?: string; message?: string }
@@ -54,7 +54,7 @@ async function stream(
   }
 
   const reader = response.body?.getReader()
-  if (reader === undefined) throw new Error('响应没有可读流')
+  if (reader === undefined) throw new Error('response has no readable stream')
   const decoder = new TextDecoder()
   let buffer = ''
 
@@ -62,7 +62,7 @@ async function stream(
     const { done, value } = await reader.read()
     if (done) break
     buffer += decoder.decode(value, { stream: true })
-    // SSE 以空行分隔事件；最后一段可能不完整，留在 buffer 里等下一块。
+    // SSE separates events with blank lines; the last piece may be partial, so it waits in the buffer.
     const parts = buffer.split('\n\n')
     buffer = parts.pop() ?? ''
     for (const part of parts) {
@@ -71,13 +71,13 @@ async function stream(
       try {
         onEvent(JSON.parse(line.slice(5).trim()) as InstallEvent)
       } catch {
-        // 半条事件不该打断整个安装过程，丢掉继续读。
+        // Half an event must not abort the whole install — drop it and keep reading.
       }
     }
   }
 }
 
-/** 建一个市场客户端。 */
+/** Create a market client. */
 export function createApi(): MarketApi {
   return {
     catalog: async ({ q, sort, page }) => {

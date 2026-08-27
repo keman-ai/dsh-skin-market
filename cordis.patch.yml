@@ -1,5 +1,6 @@
-# 本组合包贡献的配置层：把市场的 host 半插进 Loader 树。
-# profile 列出这个包时自动应用（见 apps/cli/reference：dsh.profile.bundles）。
+# The config layer this bundle contributes: it inserts the market's host half into the
+# Loader tree. Applied automatically when a profile lists this package
+# (see apps/cli/reference: dsh.profile.bundles).
 - insert:
     - id: skin-market
       name: dsh-skin-market

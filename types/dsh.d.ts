@@ -1,67 +1,68 @@
 /**
- * harness 侧 API 的最小类型面 —— 本插件用到的那部分，照 deepseek-harness
- * 0.1.0-rc.7 的源码抄写。
+ * The minimal type surface of the harness API — the part this plugin uses, transcribed
+ * from the deepseek-harness 0.1.0-rc.7 source.
  *
- * 为什么自带而不是依赖 @deepseek-ai/* ：
- *   1. 这些模块在运行时全是 external，由宿主的模块表注入（见 tsdown.config.ts
- *      的 EXTERNALS），插件包里不会、也不该打进它们的实现；
- *   2. npm 上的 @deepseek-ai/dsh-client-* 依赖链目前不完整（dsh-compact 未发布），
- *      装不下来；
- *   3. 开源仓库让贡献者 `pnpm i` 就能编译，不必先备齐一套 rc 包。
+ * Why vendored instead of depending on @deepseek-ai/*:
+ *   1. these modules are external at runtime, injected by the host's module table (see
+ *      EXTERNALS in tsdown.config.ts) — the plugin neither bundles nor should bundle them;
+ *   2. the @deepseek-ai/dsh-client-* dependency chain on npm is incomplete (dsh-compact is
+ *      unpublished), so it cannot be installed;
+ *   3. contributors can compile straight after `pnpm i`, with no rc packages to assemble first.
  *
- * 代价是这份声明可能与宿主漂移。约束：只声明真正用到的成员，每处标注源码位置，
- * 宿主报错时先回来核对这里。
+ * The cost is that these declarations can drift from the host. The rule: declare only what
+ * is actually used, note the source location at each site, and check here first when the
+ * host errors.
  */
 
 declare module '@deepseek-ai/cordis' {
-  /** 释放函数：cordis 里所有注册类 API 的统一返回。 */
+  /** Disposer: what every registration API in cordis returns. */
   export type Disposer = () => void
 
   /** packages/host/webserver/src/index.ts */
   export interface WebRoute {
-    /** 'exact' 精确匹配路径；'prefix' 匹配 p 与 p/<任意>。 */
+    /** 'exact' matches the path exactly; 'prefix' matches p and p/<anything>. */
     kind: 'exact' | 'prefix'
-    /** 绝对路径，不带结尾斜杠。 */
+    /** Absolute path, without a trailing slash. */
     path: string
-    /** 完全接管响应生命周期（可以挂住不关，例如 SSE）。 */
+    /** Takes full ownership of the response lifecycle (may stay open, e.g. for SSE). */
     handler: (
       req: import('node:http').IncomingMessage,
       res: import('node:http').ServerResponse,
     ) => void | Promise<void>
   }
 
-  /** packages/host/webserver/src/index.ts —— 浏览器 HTTP 载体。 */
+  /** packages/host/webserver/src/index.ts — the browser HTTP carrier. */
   export interface WebServer {
     register(route: WebRoute): Disposer
     tapIndex(transform: (html: string) => string): Disposer
   }
 
-  /** cordis 的 Logger 门面是 `Record<'error'|'info'|'warn'|'debug', LoggerMethod>`，这里按用到的列。 */
+  /** cordis's Logger facade is `Record<'error'|'info'|'warn'|'debug', LoggerMethod>`; only what we use is listed. */
   export interface Logger {
     info(message: unknown, ...args: readonly unknown[]): void
     warn(message: unknown, ...args: readonly unknown[]): void
     error(message: unknown, ...args: readonly unknown[]): void
-    /** 用户无需为之做任何事的信息走这一档，别拿 warn 污染正常日志。 */
+    /** Anything the user need not act on goes here — do not pollute normal logs with warn. */
     debug(message: unknown, ...args: readonly unknown[]): void
   }
 
-  /** 插件 apply 收到的上下文（本插件用到的成员）。 */
+  /** The context a plugin's apply receives (only the members this plugin uses). */
   export interface Context {
-    /** 浏览器 HTTP 载体；用 ctx.inject(['webServer'], …) 等它就绪。 */
+    /** The browser HTTP carrier; await it with ctx.inject(['webServer'], …). */
     webServer: WebServer
     logger: Logger
     /**
-     * 配置树锚点 —— cordis.yml 所在目录，也就是 profile 目录。
-     * 见 packages/client/modules/src/index.ts:209。
+     * The config-tree anchor — the directory holding cordis.yml, i.e. the profile directory.
+     * See packages/client/modules/src/index.ts:209.
      */
     baseUrl?: string
-    /** 注册一份需要清理的资源，返回其 disposer。 */
+    /** Register a resource needing cleanup; returns its disposer. */
     effect(setup: () => Disposer, label?: string): Disposer
-    /** 等待服务就绪后再跑回调。 */
+    /** Run the callback once the services are ready. */
     inject(services: readonly string[], callback: (ctx: Context) => void): void
-    /** 读一个可能不存在的服务。 */
+    /** Read a service that may not exist. */
     get<T = unknown>(name: string): T | undefined
-    /** 订阅一个事件，返回退订函数。 */
+    /** Subscribe to an event; returns the unsubscribe function. */
     on(event: string, listener: (...args: never[]) => void): Disposer
   }
 }
@@ -70,27 +71,27 @@ declare module '@deepseek-ai/dsh-client-runtime/client' {
   import type { Context, Disposer } from '@deepseek-ai/cordis'
   import type { ComponentType } from 'react'
 
-  /** slots.register 的登记项（本插件用到的字段）。 */
+  /** A slots.register entry (only the fields this plugin uses). */
   export interface SlotRegistration {
-    /** 目标 slot 名。 */
+    /** Target slot name. */
     name: string
-    /** list-kind slot 的条目 id。 */
+    /** Entry id for a list-kind slot. */
     id?: string
-    /** 同一 slot 内的排序，小的在前。 */
+    /** Ordering within a slot; lower comes first. */
     order?: number
-    /** 由注册方自行本地化的显示文本。 */
+    /** Display text, localised by the registrant. */
     label?: () => string
-    /** 该条目文案所属的词典命名空间。 */
+    /** The locale namespace this entry's copy belongs to. */
     locale?: string
-    /** 业务面工厂：返回值作为 props 注入组件。 */
+    /** Domain factory: its return value is injected into the component as props. */
     inject?: () => unknown
-    /** 本条目声明的子 slot。 */
+    /** Child slots declared by this entry. */
     children?: Record<string, { kind: 'list' | 'keyed' | 'single' | 'chain'; scope: 'root' | 'session' }>
   }
 
-  /** 浏览器侧的 slot 注册表。 */
+  /** The browser-side slot registry. */
   export interface SlotsService {
-    /** 跟随 slot 的延迟声明/重新声明注册，无需 import slot 拥有方。 */
+    /** Registers following the slot's late or repeated declaration, with no import of the slot's owner. */
     inject(name: string, factory: () => Disposer): void
     register(registration: SlotRegistration, component: ComponentType<never>): Disposer
     entries(name: string): readonly { options: SlotRegistration }[]
@@ -98,7 +99,7 @@ declare module '@deepseek-ai/dsh-client-runtime/client' {
     subscribe(name: string, listener: () => void): Disposer
   }
 
-  /** 词典服务。 */
+  /** Locale service. */
   export interface LocaleService {
     register(namespace: string, dictionaries: Record<string, Record<string, string>>): Disposer
     bind(namespace: string): (key: string, params?: Record<string, string | number>) => string
@@ -106,48 +107,49 @@ declare module '@deepseek-ai/dsh-client-runtime/client' {
     getSnapshot(): { revision: number }
   }
 
-  /** 一个可选主题：id、基色板、以及 alias token 覆盖。 */
+  /** One selectable theme: id, base palette, and alias token overrides. */
   export interface ThemeDefinition {
     id: string
     colorScheme: 'light' | 'dark'
     tokens: Record<string, string>
   }
 
-  /** 主题服务每次变化时发布的不可变快照。 */
+  /** The immutable snapshot the theme service publishes on every change. */
   export interface ThemeSnapshot {
-    /** 持久化的偏好，可能是 `system`。 */
+    /** The persisted preference, possibly `system`. */
     preference: string
-    /** 解析后的当前主题。 */
+    /** The resolved current theme. */
     active: ThemeDefinition
-    /** 已注册的主题，含内置的 light / dark 与皮肤注册进来的。 */
+    /** Registered themes, including the built-in light / dark and any registered by skins. */
     themes: readonly ThemeDefinition[]
     revision: number
   }
 
   /**
-   * 主题注册表。皮肤插件在自己的 apply 里 `register` 一个主题，但 dsh 的
-   * 「外观」设置行只渲染固定的三个内置项，不列第三方主题 —— 也就没有任何
-   * 界面能选中它。市场补的正是这一环：把已注册的主题列出来，让用户点。
+   * Theme registry. A skin plugin registers its theme in its own apply, but dsh's
+   * Appearance row renders only the three built-ins and never lists third-party themes —
+   * leaving no UI that can select it. Filling that gap is exactly what the market does:
+   * list the registered themes so the user can pick one.
    */
   export interface ThemeRuntime {
     getTheme(): ThemeSnapshot
-    /** 切换偏好。传已注册的主题 id 或 `system`；未注册的 id 会抛错。 */
+    /** Change the preference. Pass a registered theme id or `system`; an unregistered id throws. */
     setTheme(id: string): void
   }
 
-  /** 浏览器插件上下文。 */
+  /** Browser plugin context. */
   export interface ClientContext extends Context {
     slots: SlotsService
     locale: LocaleService
-    /** 由 ui-theme 提供；组合里没有它时 `ctx.get('theme')` 返回 undefined。 */
+    /** Provided by ui-theme; without it in the bundle, `ctx.get('theme')` returns undefined. */
     theme?: ThemeRuntime
   }
 }
 
 declare module '@deepseek-ai/dsh-client-ui-settings/client' {
-  // 只为把设置外壳的 slot 声明（settings.section 等）拉进编译面，无值导出。
+  // Type-only, purely to bring the settings shell's slot declarations (settings.section etc.) into the compilation surface.
 }
 
 declare module '@deepseek-ai/dsh-client-locale/client' {
-  // 同上：拉入 ctx.locale 的 Context 合并。
+  // As above: brings in the ctx.locale Context merge.
 }

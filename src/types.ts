@@ -1,104 +1,109 @@
 /**
- * 市场两半之间的线上契约。client 半只认这里的形状，不认集市后端的原始响应 ——
- * 上游字段有变化时，只有 catalog.ts 的归一化需要改。
+ * The wire contract between the market's two halves. The client half knows only these
+ * shapes, never the registry backend's raw response — when upstream fields change, only
+ * catalog.ts's normalisation has to follow.
  */
 
 import type { SpecKind } from './spec.ts'
 
 export type { SpecKind } from './spec.ts'
 
-/** 目录里的一条皮肤。变体已展平：一个仓库带多套皮肤时，每套是独立一条。 */
+/** One skin in the catalog. Variants are flattened: a repo with several skins yields one entry each. */
 export interface SkinEntry {
-  /** 集市侧的稳定 id。 */
+  /** Stable id on the registry side. */
   readonly skinId: string
-  /** 包标识，展示用。 */
+  /** Package identifier, for display. */
   readonly slug: string
-  /** 变体名；有值时展示为 `slug#variant`。 */
+  /** Variant name; when present it displays as `slug#variant`. */
   readonly variant?: string
-  /** 展示名。 */
+  /** Display name. */
   readonly name: string
-  /** 一句话卖点。 */
+  /** One-line pitch. */
   readonly tagline?: string
-  /** 作者展示名。 */
+  /** Author display name. */
   readonly author: string
-  /** 作者主页。 */
+  /** Author home page. */
   readonly authorUrl?: string
-  /** 卡片图标。 */
+  /** Card icon. */
   readonly iconUrl?: string
-  /** 分类标签。 */
+  /** Category tags. */
   readonly category?: string
-  /** GitHub star，集市侧定时同步而来。 */
+  /** GitHub stars, synced periodically by the registry. */
   readonly starCount: number
-  /** 发布日期 YYYY-MM-DD。 */
+  /** Publication date, YYYY-MM-DD. */
   readonly releasedAt?: string
-  /** 源码仓库。 */
+  /** Source repository. */
   readonly repoUrl?: string
   /**
-   * 安装用的确切 spec（npm 包名、`github:owner/repo#sha`，或 .tgz 的 https 地址）。
-   * 缺失表示这条只能看不能装 —— UI 据此禁用安装按钮，而不是装了才失败。
+   * The exact install spec (an npm package name, `github:owner/repo#sha`, or an https
+   * .tgz URL). Absent means this entry is browsable but not installable — the UI disables
+   * the install button rather than letting it fail after the attempt.
    */
   readonly installSpec?: string
   /**
-   * 这条 spec 的来源类型。与 `installSpec` 同生同灭：能装就一定有 kind。
+   * The source type of this spec. It lives and dies with `installSpec`: anything
+   * installable has a kind.
    *
-   * 界面按它决定说什么、给不给「授权重试」的出口 —— git 源要 clone 整个仓库并在本机
-   * 构建，npm 与 tarball 是拿现成的发布物，两者的等待时间和风险不是一回事，
-   * 不该用同一套话术糊过去。
+   * The UI uses it to decide what to say and whether to offer "authorise and retry" — a
+   * git source clones the whole repo and builds locally, while npm and tarball fetch a
+   * finished artefact. The wait and the risk are not the same, and one blanket wording
+   * would paper over that.
    */
   readonly installKind?: SpecKind
-  /** 手动安装时该敲的完整命令，供「复制命令」用。 */
+  /** The full command to type for a manual install, used by "copy command". */
   readonly installCommand?: string
-  /** 安装成功次数，热度排序用。 */
+  /** Successful install count, used for popularity sorting. */
   readonly installCount: number
 }
 
-/** 目录响应。 */
+/** Catalog response. */
 export interface CatalogPage {
   readonly items: readonly SkinEntry[]
   readonly total: number
   readonly page: number
   readonly size: number
-  /** 数据从哪来：上游、本地缓存、还是随包快照。UI 直说，不假装在线。 */
+  /** Where the data came from: upstream, local cache or bundled snapshot. The UI says so plainly rather than pretending to be online. */
   readonly source: 'live' | 'cache' | 'snapshot'
-  /** source 非 live 时的原因，原样展示给用户。 */
+  /** Why source is not live, shown to the user verbatim. */
   readonly staleReason?: string
 }
 
-/** 本机已装的一条皮肤。 */
+/** One skin installed on this machine. */
 export interface InstalledSkin {
-  /** package.json 里的包名。 */
+  /** The package name from package.json. */
   readonly packageName: string
-  /** 已装版本。 */
+  /** Installed version. */
   readonly version?: string
-  /** profile 的 patch 层里那一行的 id。 */
+  /** Id of the row in the profile's patch layer. */
   readonly rowId: string
   /**
-   * 这个皮肤注册的主题 id（取自包里的 skin.json#id）。
+   * The theme id this skin registers, read from the package's skin.json#id.
    *
-   * 启用按钮要用它去 setTheme —— 包名与主题 id 并不相等
-   * （dsh-deepseek-twin-whale 的主题 id 是 twinwhale），所以必须从包里读，
-   * 不能从包名推。读不到就没有启用按钮，只能卸载。
+   * The enable button passes it to setTheme. Package name and theme id are not the same
+   * (dsh-deepseek-twin-whale registers `twinwhale`), so it must be read from the package,
+   * never inferred from the name. Unreadable means no enable button, only uninstall.
    */
   readonly themeId?: string
-  /** 依赖 spec（npm 版本号或 git 地址）。 */
+  /** Dependency spec (an npm version or a git URL). */
   readonly spec?: string
-  /** patch 行是否被停用。 */
+  /** Whether the patch row is disabled. */
   readonly disabled: boolean
 }
 
-/** 安装/卸载过程中回流给前端的一条事件。 */
+/** One event streamed back to the front end during install or uninstall. */
 export type InstallEvent =
   | { readonly type: 'log'; readonly line: string }
   | { readonly type: 'step'; readonly step: InstallStep }
   | { readonly type: 'done'; readonly packageName: string; readonly needsReload: boolean }
   | { readonly type: 'error'; readonly code: InstallErrorCode; readonly message: string; readonly detail?: string }
 
-/** 安装的几个阶段，UI 用来画进度。 */
+/** Install phases, used by the UI to draw progress. */
 export type InstallStep = 'resolve' | 'download' | 'patch' | 'compose'
 
 /**
- * 失败原因。分得细是因为每种的下一步动作不同：缺 pnpm 要引导安装，
- * 构建脚本被拦要用户授权，spec 不在目录里要直接拒绝。
+ * Failure reasons. They are fine-grained because each implies a different next step:
+ * a missing pnpm needs installation guidance, a blocked build script needs user consent,
+ * and a spec absent from the catalog is simply refused.
  */
 export type InstallErrorCode =
   | 'PNPM_MISSING'
@@ -112,7 +117,7 @@ export type InstallErrorCode =
   | 'NOT_INSTALLED'
   | 'NOT_A_BUNDLE'
 
-/** 诊断页的一行。 */
+/** One row on the diagnostics page. */
 export interface DiagnosticRow {
   readonly key: string
   readonly value: string
@@ -120,9 +125,9 @@ export interface DiagnosticRow {
   readonly hint?: string
 }
 
-/** 诊断快照。 */
+/** Diagnostics snapshot. */
 export interface Diagnostics {
   readonly rows: readonly DiagnosticRow[]
-  /** 最近一次安装的完整输出，贴给我们排查用。 */
+  /** Full output of the most recent install, for pasting to us when reporting a problem. */
   readonly lastInstallLog?: string
 }

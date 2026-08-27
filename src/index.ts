@@ -1,8 +1,9 @@
 /**
- * host 半：把市场的 HTTP 面挂到 dsh 自己的 web 服务上。
+ * Host half: mounts the market's HTTP surface onto dsh's own web server.
  *
- * client 半通过同源 fetch 调这些路由，而不是 ctx.remote —— remote 的能力集在
- * api-remotes 构建期就固定了，第三方插件加不进去（packages/api/remotes/README.zh.md）。
+ * The client half calls these routes with a same-origin fetch rather than ctx.remote — the
+ * remote capability set is fixed at api-remotes build time and third-party plugins cannot add
+ * to it (packages/api/remotes/README.zh.md).
  */
 
 import type { IncomingMessage, ServerResponse } from 'node:http'
@@ -17,48 +18,51 @@ import type { Diagnostics, DiagnosticRow, InstallEvent } from './types.ts'
 export { Catalog, DEFAULT_CATALOG_ORIGIN } from './catalog.ts'
 export * from './types.ts'
 
-/** 插件名（loader 行的 name）。 */
+/** Plugin name (the `name` of the loader entry). */
 export const name = 'skin-market'
 
-/** 等 web 服务就绪；没有它这个插件没有意义。 */
+/** Wait for the web server; without it this plugin is pointless. */
 export const inject = ['webServer']
 
-/** 路由前缀。client 半按同一个常量拼 URL。 */
+/** Route prefix. The client half builds its URLs from the same constant. */
 export const API_PREFIX = '/skin-market/api'
 
-/** 插件配置。 */
+/** Plugin config. */
 export interface Config {
-  /** 集市根地址，需含 context-path。 */
+  /** Registry root URL, including the context path. */
   readonly catalogOrigin?: string
   /**
-   * 是否允许安装。关掉后市场只读，安装按钮退化成"复制安装命令"。
-   * 共享机器上想彻底禁掉写操作时用。
+   * Whether installing is allowed. When off the market is read-only and the install button
+   * degrades to "copy install command". For shared machines where writes must be disabled.
    */
   readonly allowInstall?: boolean
 }
 
 /**
- * 装成功后给集市记一次热度。
+ * Report one popularity hit to the registry after a successful install.
  *
- * 🔴 <b>刻意不 await</b>：皮肤此刻已经装好了，回报是纯统计。集市慢或者挂了，
- * 不该让「已装好」这个结论等它，更不该因此把成功报成失败。
+ * 🔴 <b>Deliberately not awaited.</b> The skin is already installed and this is pure telemetry.
+ * A slow or dead registry must not delay the "installed" verdict, still less turn success into
+ * failure.
  *
- * 没有这一下的话，集市上的装机量只统计得到「在网页上点了复制安装命令」的人，
- * 从本插件一键装的全都不计入，排序会失真。
+ * Without it, the registry's install counts would only include people who clicked "copy
+ * install command" on the web page, missing every one-click install from this plugin and
+ * skewing the ranking.
  *
- * @param ctx - 插件上下文，只用来打日志。
- * @param catalog - 目录服务。
- * @param skinId - 集市条目 id，由 spec 在目录里反查得到，不取客户端传入值。
+ * @param ctx - Plugin context, used only for logging.
+ * @param catalog - The catalog service.
+ * @param skinId - The registry entry id, looked up from the spec in the catalog rather than
+ *   taken from client input.
  */
 function reportInstalled(ctx: Context, catalog: Catalog, skinId: string): void {
   void catalog.reportInstall(skinId).then((recorded) => {
     if (!recorded) {
-      ctx.logger.debug('[skin-market] 装机量回报没记上（skinId=%s），不影响安装结果', skinId)
+      ctx.logger.debug('[skin-market] install count was not recorded (skinId=%s); the install result is unaffected', skinId)
     }
   })
 }
 
-/** 预览图的 content-type。只认这几种，不猜。 */
+/** Content types for preview images. Only these are recognised; nothing is guessed. */
 const IMAGE_TYPES: Record<string, string> = {
   webp: 'image/webp',
   png: 'image/png',
@@ -69,7 +73,7 @@ const IMAGE_TYPES: Record<string, string> = {
   svg: 'image/svg+xml',
 }
 
-/** JSON 响应。 */
+/** JSON response. */
 function json(res: ServerResponse, status: number, body: unknown): void {
   const payload = JSON.stringify(body)
   res.writeHead(status, {
@@ -81,10 +85,11 @@ function json(res: ServerResponse, status: number, body: unknown): void {
 }
 
 /**
- * 直连本机才放行写操作。
+ * Allow write operations only from a direct local connection.
  *
- * 只认 socket 的对端地址，并且带了转发头就直接拒 —— 一个反代把外部请求转进来时
- * socket 看着也是 127.0.0.1，仅凭它会把"本机才能装"这条保证架空。
+ * Only the socket's peer address counts, and any forwarding header is an outright refusal —
+ * a reverse proxy relaying an external request also looks like 127.0.0.1 on the socket, so the
+ * address alone would hollow out the "local installs only" guarantee.
  */
 function isDirectLoopback(req: IncomingMessage): boolean {
   if (req.headers['x-forwarded-for'] !== undefined || req.headers['x-forwarded-host'] !== undefined) return false
@@ -92,7 +97,7 @@ function isDirectLoopback(req: IncomingMessage): boolean {
   return address === '127.0.0.1' || address === '::1' || address === '::ffff:127.0.0.1'
 }
 
-/** 同源 POST：Origin 存在时必须与 Host 一致，挡掉别的网页对本地端口发指令。 */
+/** Same-origin POST: when Origin is present it must match Host, blocking other pages from commanding the local port. */
 function isSameOrigin(req: IncomingMessage): boolean {
   const origin = req.headers.origin
   if (origin === undefined) return true
@@ -103,20 +108,20 @@ function isSameOrigin(req: IncomingMessage): boolean {
   }
 }
 
-/** 读 JSON 请求体，带体积上限。 */
+/** Read a JSON request body, with a size cap. */
 async function readBody(req: IncomingMessage): Promise<Record<string, unknown>> {
   const chunks: Buffer[] = []
   let size = 0
   for await (const chunk of req) {
     size += (chunk as Buffer).length
-    if (size > 64 * 1024) throw new Error('请求体过大')
+    if (size > 64 * 1024) throw new Error('request body too large')
     chunks.push(chunk as Buffer)
   }
   if (chunks.length === 0) return {}
   return JSON.parse(Buffer.concat(chunks).toString('utf8')) as Record<string, unknown>
 }
 
-/** 开一条 SSE，返回推事件的函数。安装过程可能几十秒，一次性响应会让用户以为卡死。 */
+/** Open an SSE stream and return a push function. An install can take tens of seconds, and a single response would look hung. */
 function openStream(res: ServerResponse): (event: InstallEvent) => void {
   res.writeHead(200, {
     'content-type': 'text/event-stream; charset=utf-8',
@@ -127,11 +132,12 @@ function openStream(res: ServerResponse): (event: InstallEvent) => void {
 }
 
 /**
- * 装/卸的公共外壳：鉴权、取参、开流、跑、把失败也当成流里的一条事件发出去。
- * @param ctx - 插件上下文（用于日志）。
- * @param config - 插件配置。
- * @param profileDir - profile 目录。
- * @param action - 实际动作。
+ * Shared shell for install and uninstall: authorise, read parameters, open the stream, run, and
+ * emit failures as events on the stream too.
+ * @param ctx - Plugin context, for logging.
+ * @param config - Plugin config.
+ * @param profileDir - The profile directory.
+ * @param action - The actual operation.
  */
 function writeRoute(
   ctx: Context,
@@ -142,23 +148,23 @@ function writeRoute(
   return async (req: IncomingMessage, res: ServerResponse): Promise<void> => {
     if (req.method !== 'POST') return json(res, 405, { code: 'METHOD_NOT_ALLOWED' })
     if (config.allowInstall === false) {
-      return json(res, 403, { code: 'INSTALL_DISABLED', message: '这台机器上的市场是只读的' })
+      return json(res, 403, { code: 'INSTALL_DISABLED', message: 'the market is read-only on this machine' })
     }
     if (!isDirectLoopback(req) || !isSameOrigin(req)) {
       return json(res, 403, {
         code: 'NOT_LOOPBACK',
-        message: '安装只允许本机直连的浏览器发起',
+        message: 'installs may only be initiated by a browser connected directly to this machine',
       })
     }
     if (profileDir === undefined) {
-      return json(res, 500, { code: 'PROFILE_UNRESOLVED', message: '定位不到 profile 目录（ctx.baseUrl 为空）' })
+      return json(res, 500, { code: 'PROFILE_UNRESOLVED', message: 'cannot locate the profile directory (ctx.baseUrl is empty)' })
     }
 
     let body: Record<string, unknown>
     try {
       body = await readBody(req)
     } catch (error) {
-      return json(res, 400, { code: 'BAD_REQUEST', message: error instanceof Error ? error.message : '请求体无法解析' })
+      return json(res, 400, { code: 'BAD_REQUEST', message: error instanceof Error ? error.message : 'request body could not be parsed' })
     }
 
     const emit = openStream(res)
@@ -186,26 +192,26 @@ function writeRoute(
   }
 }
 
-/** 诊断：装不上时用户第一时间能自查，也方便把这一屏贴给我们。 */
+/** Diagnostics: what a user checks first when an install fails, and a screen that is easy to paste to us. */
 async function diagnose(profileDir: string | undefined, catalog: Catalog): Promise<Diagnostics> {
   const rows: DiagnosticRow[] = []
 
   if (profileDir === undefined) {
-    rows.push({ key: 'profile 目录', value: '未解析（ctx.baseUrl 为空）', status: 'error' })
+    rows.push({ key: 'profile directory', value: 'unresolved (ctx.baseUrl is empty)', status: 'error' })
   } else {
     const writable = await isWritable(profileDir)
     rows.push({
-      key: 'profile 目录',
+      key: 'profile directory',
       value: profileDir,
       status: writable ? 'ok' : 'error',
-      ...(writable ? {} : { hint: '目录不可写，安装会失败' }),
+      ...(writable ? {} : { hint: 'directory is not writable; installs will fail' }),
     })
     const version = await pnpmVersion(profileDir)
     rows.push(version === undefined
-      ? { key: 'pnpm', value: '不在 PATH 上', status: 'error', hint: '试试 corepack enable pnpm' }
+      ? { key: 'pnpm', value: 'not on PATH', status: 'error', hint: 'try corepack enable pnpm' }
       : { key: 'pnpm', value: version, status: 'ok' })
     rows.push({
-      key: '已安装皮肤',
+      key: 'installed skins',
       value: String((await listInstalled(profileDir)).length),
       status: 'ok',
     })
@@ -214,10 +220,10 @@ async function diagnose(profileDir: string | undefined, catalog: Catalog): Promi
   const started = Date.now()
   const page = await catalog.page({ page: 1, size: 1 })
   rows.push({
-    key: '集市连通性',
+    key: 'registry connectivity',
     value: page.source === 'live'
-      ? `正常 · ${Date.now() - started}ms · 共 ${page.total} 条`
-      : (page.staleReason ?? '不可用'),
+      ? `ok · ${Date.now() - started}ms · ${page.total} entries`
+      : (page.staleReason ?? 'unavailable'),
     status: page.source === 'live' ? 'ok' : 'warn',
   })
 
@@ -226,17 +232,17 @@ async function diagnose(profileDir: string | undefined, catalog: Catalog): Promi
 }
 
 /**
- * 挂载市场的 host 半。
- * @param ctx - 插件上下文。
- * @param config - 插件配置。
+ * Mount the market's host half.
+ * @param ctx - Plugin context.
+ * @param config - Plugin config.
  */
 export function apply(ctx: Context, config: Config = {}): void {
   const catalog = new Catalog(config.catalogOrigin ?? DEFAULT_CATALOG_ORIGIN)
   const profileDir = profileDirOf(ctx.baseUrl)
 
   if (profileDir === undefined) {
-    // 装不了不等于不能逛：目录、搜索、源码链接照常可用，只是安装会明确报错。
-    ctx.logger.warn('[skin-market] ctx.baseUrl 为空，定位不到 profile 目录，安装功能不可用')
+    // Not being able to install does not mean not being able to browse: catalog, search and source links all work; only installing reports an explicit error.
+    ctx.logger.warn('[skin-market] ctx.baseUrl is empty, so the profile directory cannot be located and installing is unavailable')
   }
 
   const routes: { path: string; handler: (req: IncomingMessage, res: ServerResponse) => Promise<void> | void }[] = [
@@ -260,8 +266,9 @@ export function apply(ctx: Context, config: Config = {}): void {
       },
     },
     {
-      // 已装皮肤的预览图。走本地文件而不是集市的 iconUrl：
-      // 「已安装」这一屏的定位就是断网也能管，图标不该是唯一要联网的东西。
+      // Preview images for installed skins, served from local files rather than the registry's
+      // iconUrl: the "installed" screen exists to work offline, and an icon should not be the one
+      // thing that still needs the network.
       path: `${API_PREFIX}/icon`,
       handler: async (req, res) => {
         const url = new URL(req.url ?? '/', 'http://x')
@@ -270,8 +277,8 @@ export function apply(ctx: Context, config: Config = {}): void {
           res.writeHead(404).end()
           return
         }
-        // 只给已装的包出图：包名先过一遍已装列表，
-        // 免得这个路由变成「拿包名探测 node_modules 里有什么」的工具
+        // Serve images only for installed packages: the name is checked against the installed list
+        // first, so this route does not become a tool for probing what lives in node_modules
         const installed = await listInstalled(profileDir)
         if (!installed.some(row => row.packageName === packageName)) {
           res.writeHead(404).end()
@@ -288,8 +295,8 @@ export function apply(ctx: Context, config: Config = {}): void {
           res.writeHead(200, {
             'content-type': IMAGE_TYPES[ext] ?? 'application/octet-stream',
             'content-length': body.byteLength,
-            // 图片随包走，包不变图就不变；装新版本时包名相同但内容会变，
-            // 所以给一个短缓存而不是长缓存
+            // The image travels with the package, so it is stable while the package is; installing a new
+            // version keeps the name but changes the content, hence a short cache rather than a long one
             'cache-control': 'private, max-age=300',
           })
           res.end(body)
@@ -306,13 +313,13 @@ export function apply(ctx: Context, config: Config = {}): void {
       path: `${API_PREFIX}/install`,
       handler: writeRoute(ctx, config, profileDir, async (dir, body, emit) => {
         const spec = typeof body.spec === 'string' ? body.spec : ''
-        if (spec === '') throw new InstallFailure('SPEC_NOT_IN_CATALOG', '缺少安装 spec')
-        // 只装集市收录过的东西：用户手输任意包名不放行。
+        if (spec === '') throw new InstallFailure('SPEC_NOT_IN_CATALOG', 'missing install spec')
+        // Install only what the registry lists: an arbitrary hand-typed package name is refused.
         const entry = await catalog.findBySpec(spec)
         if (entry === undefined) {
           throw new InstallFailure(
             'SPEC_NOT_IN_CATALOG',
-            `${spec} 不在集市目录里，市场不代装未收录的包`,
+            `${spec} is not in the registry catalog; the market does not install unlisted packages`,
           )
         }
         await install(dir, spec, emit)
@@ -323,7 +330,7 @@ export function apply(ctx: Context, config: Config = {}): void {
       path: `${API_PREFIX}/uninstall`,
       handler: writeRoute(ctx, config, profileDir, async (dir, body, emit) => {
         const packageName = typeof body.packageName === 'string' ? body.packageName : ''
-        if (packageName === '') throw new InstallFailure('NOT_INSTALLED', '缺少包名')
+        if (packageName === '') throw new InstallFailure('NOT_INSTALLED', 'missing package name')
         await uninstall(dir, packageName, emit)
       }),
     },
@@ -331,37 +338,41 @@ export function apply(ctx: Context, config: Config = {}): void {
       path: `${API_PREFIX}/allow-builds`,
       handler: writeRoute(ctx, config, profileDir, async (dir, body, emit) => {
         const spec = typeof body.spec === 'string' ? body.spec : ''
-        if (spec === '') throw new InstallFailure('SPEC_NOT_IN_CATALOG', '缺少 spec')
+        if (spec === '') throw new InstallFailure('SPEC_NOT_IN_CATALOG', 'missing spec')
         const entry = await catalog.findBySpec(spec)
         if (entry === undefined) {
-          throw new InstallFailure('SPEC_NOT_IN_CATALOG', `${spec} 不在集市目录里`)
+          throw new InstallFailure('SPEC_NOT_IN_CATALOG', `${spec} is not in the registry catalog`)
         }
         /*
-         * 授权只对 git 源成立。
+         * Authorisation only makes sense for git sources.
          *
-         * npm 包和 tarball 装的是发布物，构建在作者那边就做完了 —— 它们撞上
-         * BUILD_SCRIPT_BLOCKED 只可能是包本身有毛病（漏了构建产物、files 配错），
-         * 让用户授权「在本机执行这个包的脚本」既解决不了问题，又白白让他承担了风险。
+         * npm packages and tarballs install a published artefact built on the author's side, so
+         * hitting BUILD_SCRIPT_BLOCKED can only mean the package itself is broken (missing build
+         * output, or a misconfigured files field). Asking the user to permit that package's
+         * scripts to run locally fixes nothing and makes them carry the risk for free.
          *
-         * 顺带堵掉一个具体的坑：tarball 的裸名推导会得到 `dsh-niulai-0.1.0.tgz`，
-         * 拿它去写 allowBuilds 是授权了一个不存在的依赖名，重试必然再失败一次。
+         * It also closes a concrete trap: deriving a bare name from a tarball yields
+         * `dsh-niulai-0.1.0.tgz`, and writing that into allowBuilds authorises a dependency name
+         * that does not exist, so the retry is guaranteed to fail again.
          */
         const info = classifySpec(spec)
         if (info === undefined) {
-          throw new InstallFailure('SPEC_NOT_IN_CATALOG', `${spec} 不是一条可安装的 spec`)
+          throw new InstallFailure('SPEC_NOT_IN_CATALOG', `${spec} is not an installable spec`)
         }
         if (!info.buildsFromSource || info.bareName === undefined) {
           throw new InstallFailure(
             'BUILD_SCRIPT_BLOCKED',
-            `${spec} 装的是预构建的发布物，不需要、也不应该授权构建脚本。`,
-            '装不上多半是这个包自己有问题（缺构建产物，或者 package.json 的 files 配错了），'
-            + '授权执行它的脚本解决不了，建议向作者反馈。',
+            `${spec} installs a prebuilt artefact, so build scripts need not — and should not — be authorised.`,
+            'A failure here most likely means the package itself is broken (missing build output, or '
+            + 'a misconfigured files field in package.json). Authorising its scripts will not fix that; '
+            + 'consider telling the author.',
           )
         }
-        // 真实包名要装完才知道，而授权必须发生在装之前 —— 用 spec 的裸名授权，
-        // pnpm 的 allowBuilds 按依赖名匹配，git 源的裸名与之一致。
+        // The real package name is known only after installing, while authorisation must precede it —
+        // so authorise the spec's bare name: pnpm matches allowBuilds by dependency name, and for a
+        // git source the bare name is the same.
         await allowBuilds(dir, info.bareName)
-        emit({ type: 'log', line: `✓ 已授权 ${info.bareName} 运行构建脚本，正在重试安装` })
+        emit({ type: 'log', line: `✓ authorised ${info.bareName} to run build scripts; retrying the install` })
         await install(dir, spec, emit)
         reportInstalled(ctx, catalog, entry.skinId)
       }),
@@ -375,5 +386,5 @@ export function apply(ctx: Context, config: Config = {}): void {
     )
   }
 
-  ctx.logger.info('[skin-market] 已挂载 %s/*（profile: %s）', API_PREFIX, profileDir ?? '未解析')
+  ctx.logger.info('[skin-market] mounted %s/* (profile: %s)', API_PREFIX, profileDir ?? 'unresolved')
 }

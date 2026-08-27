@@ -1,7 +1,7 @@
 /**
- * 皮肤市场的设置页：三个 tab（发现 / 已安装 / 诊断）。
+ * The skin market settings page: three tabs (Discover / Installed / Diagnostics).
  *
- * 组件只管界面状态；集市地址、缓存、安装白名单都在 host 半。
+ * The component owns UI state only; the registry URL, caching and the install allowlist live in the host half.
  */
 
 import { useCallback, useEffect, useMemo, useRef, useState, type JSX } from 'react'
@@ -13,15 +13,15 @@ import { SkinCard, cardKeyOf } from './SkinCard.tsx'
 import { AppearancePicker, DiagnosticsPanel, InstalledPanel } from './panels.tsx'
 import styles from './market.module.css'
 
-/** 由 slot 的 inject 工厂注入的业务面。 */
+/** The domain surface injected by the slot's inject factory. */
 export interface SkinMarketInjected {
   readonly api: MarketApi
   readonly t: (key: string, params?: Record<string, string | number>) => string
-  /** 插件版本，页头展示。 */
+  /** Plugin version, shown in the page header. */
   readonly version: string
   /**
-   * 外观面。宿主组合里没有 ui-theme 时为 undefined —— 那时市场只管装，
-   * 不管应用（外观区块整个不渲染）。
+   * The appearance surface. Undefined when the host bundle has no ui-theme — the market then
+   * only installs and does not apply, and the appearance section is not rendered at all.
    */
   readonly appearance?: {
     readonly options: () => readonly AppearanceOption[]
@@ -32,10 +32,10 @@ export interface SkinMarketInjected {
 
 type Tab = 'discover' | 'installed' | 'diagnostics'
 
-/** 搜索防抖：边打字边打服务端会把上游打满，也会让列表抖。 */
+/** Search debounce: hitting the server on every keystroke saturates upstream and makes the list jitter. */
 const SEARCH_DEBOUNCE_MS = 350
 
-/** 取值由集市定义，不是我们自己起的名字：popular / latest / name。 */
+/** The values are defined by the registry, not named by us: popular / latest / name. */
 const SORTS = [
   { key: 'popular', label: 'sort.popular' },
   { key: 'latest', label: 'sort.latest' },
@@ -43,9 +43,9 @@ const SORTS = [
 ] as const
 
 /**
- * 市场页。
- * @param props - 注入的业务面。
- * @returns 页面元素。
+ * The market page.
+ * @param props - The injected domain surface.
+ * @returns The page element.
  */
 export function SkinMarketSection({ api, t, version, appearance }: SkinMarketInjected): JSX.Element {
   const [tab, setTab] = useState<Tab>('discover')
@@ -60,17 +60,17 @@ export function SkinMarketSection({ api, t, version, appearance }: SkinMarketInj
   const [states, setStates] = useState<ReadonlyMap<string, CardState>>(new Map())
   const [themes, setThemes] = useState<readonly AppearanceOption[]>(() => appearance?.options() ?? [])
   const builtinThemes = themes.filter(option => option.builtin)
-  /** 当前生效的主题 id。已安装列表据此标出哪一套是启用中的。 */
+  /** The currently active theme id, used by the installed list to mark which skin is enabled. */
   const activeThemeId = themes.find(option => option.active && !option.builtin)?.id
 
-  // 皮肤的 bundle 是异步加载的，主题会在页面起来之后才注册进来。
+  // A skin's bundle loads asynchronously, so its theme registers after the page is already up.
   useEffect(() => {
     if (appearance === undefined) return
     setThemes(appearance.options())
     return appearance.subscribe(() => { setThemes(appearance.options()) })
   }, [appearance])
 
-  // 卸载后仍可能有事件回来，用它挡住对已卸组件的 setState。
+  // Events can still arrive after unmount; this guards against setState on an unmounted component.
   const alive = useRef(true)
   useEffect(() => () => { alive.current = false }, [])
 
@@ -97,7 +97,7 @@ export function SkinMarketSection({ api, t, version, appearance }: SkinMarketInj
       const items = await api.installed()
       if (alive.current) setInstalled(items)
     } catch {
-      // 已装列表拿不到不该影响浏览目录，留空即可。
+      // Failing to read the installed list must not stop catalog browsing — leave it empty.
     }
   }, [api])
 
@@ -114,13 +114,13 @@ export function SkinMarketSection({ api, t, version, appearance }: SkinMarketInj
     setStates(prev => new Map(prev).set(key, next))
   }, [])
 
-  /** 跑一次装/卸，把过程事件归约进那张卡的状态。 */
+  /** Run one install or uninstall, reducing progress events into that card's state. */
   const runAction = useCallback(async (
     key: string,
     verb: CardVerb,
     action: (onEvent: (event: Parameters<typeof reduce>[1]) => void) => Promise<void>,
   ) => {
-    // 装在对象里而不是裸 let：状态是在回调里推进的，裸变量会被窄化成初始的 working。
+    // Held in an object rather than a bare let: the state advances inside callbacks, and a bare variable would be narrowed to the initial working.
     const box: { state: CardState } = { state: { kind: 'working', verb, log: [] } }
     setState(key, box.state)
     await action((event) => {
@@ -138,7 +138,7 @@ export function SkinMarketSection({ api, t, version, appearance }: SkinMarketInj
     void runAction(cardKeyOf(entry), 'install', onEvent => api.allowBuilds(entry.installSpec ?? '', onEvent))
   }, [api, runAction])
 
-  // 卸载要的是真实包名，从已装列表里按 spec 反查 —— 卡片自己并不知道它。
+  // Uninstall needs the real package name, looked up from the installed list by spec — the card itself does not know it.
   const onUninstallEntry = useCallback((entry: SkinEntry) => {
     const match = installed.find(row => row.spec === entry.installSpec)
     if (match === undefined) return
@@ -153,7 +153,7 @@ export function SkinMarketSection({ api, t, version, appearance }: SkinMarketInj
     setState(cardKeyOf(entry), IDLE)
   }, [setState])
 
-  // 按 spec 判断"这条装没装"：spec 是集市与本机之间唯一稳定的对应关系。
+  // Decide "is this installed" by spec: the spec is the only stable correspondence between the registry and this machine.
   const installedSpecs = useMemo(
     () => new Set(installed.map(item => item.spec).filter((spec): spec is string => spec !== undefined)),
     [installed],
@@ -261,9 +261,9 @@ export function SkinMarketSection({ api, t, version, appearance }: SkinMarketInj
       {tab === 'installed' && (
         <>
           {/*
-            外观行只列 dsh 自带的三个（跟随系统 / 浅色 / 深色）。
-            第三方皮肤改在「已安装」里用启用按钮切 —— 皮肤多起来之后，
-            这一行会被一排 id 撑爆，而且那些 id 对用户没有意义。
+            The appearance row lists only dsh's own three (follow system / light / dark).
+            Third-party skins are switched from the Installed tab instead — once there are many,
+            this row would burst with a line of ids that mean nothing to the user.
           */}
           {appearance !== undefined && builtinThemes.length > 0 && (
             <AppearancePicker options={builtinThemes} t={t} onSelect={appearance.select} />

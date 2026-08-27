@@ -1,27 +1,28 @@
 /**
- * 目录归一化与降级。集市的字段还在补齐中，所以这里的重点是：
- * 缺字段不能让整页拉不出来，上游异常不能让设置页白屏。
+ * Catalog normalisation and degradation. The registry's fields are still being filled in, so
+ * what matters here is: a missing field must not take down a whole page, and an upstream fault
+ * must not leave the settings page blank.
  */
 
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import { Catalog, normalizeEntry } from '../src/catalog.ts'
 
-test('最小字段也能归一化出一条', () => {
+test('a minimal record still normalises into one entry', () => {
   const entry = normalizeEntry({ skinId: 'skin_1', slug: 'dsh-cool' })
   assert.equal(entry?.skinId, 'skin_1')
   assert.equal(entry?.name, 'dsh-cool')
-  assert.equal(entry?.author, '匿名')
+  assert.equal(entry?.author, 'anonymous')
   assert.equal(entry?.starCount, 0)
 })
 
-test('连 id 都没有的行丢弃，而不是塞一条空卡片进列表', () => {
-  assert.equal(normalizeEntry({ name: '没有 id' }), undefined)
+test('a row without even an id is dropped rather than pushed into the list as an empty card', () => {
+  assert.equal(normalizeEntry({ name: 'no id' }), undefined)
   assert.equal(normalizeEntry(null), undefined)
-  assert.equal(normalizeEntry('字符串'), undefined)
+  assert.equal(normalizeEntry('a string'), undefined)
 })
 
-test('安装 spec 优先 npm 包名，没有才从仓库地址推 github:', () => {
+test('the install spec prefers the npm name, deriving github: from the repo URL only when absent', () => {
   const npm = normalizeEntry({
     skinId: 's1', slug: 'a', packageName: 'dsh-cool-skin',
     repoUrl: 'https://github.com/owner/dsh-cool-skin',
@@ -31,12 +32,12 @@ test('安装 spec 优先 npm 包名，没有才从仓库地址推 github:', () =
   const git = normalizeEntry({ skinId: 's2', slug: 'b', repoUrl: 'https://github.com/owner/repo.git' })
   assert.equal(git?.installSpec, 'github:owner/repo')
 
-  // 两者都没有 = 不可装，UI 据此禁用按钮而不是点了才失败。
+  // Neither present means uninstallable, and the UI disables the button rather than failing after a click.
   const neither = normalizeEntry({ skinId: 's3', slug: 'c' })
   assert.equal(neither?.installSpec, undefined)
 })
 
-test('每条可装的都带上来源类型与手动命令 —— 界面据此换话术', () => {
+test('every installable entry carries a source kind and a manual command, which the UI uses to change its wording', () => {
   const npm = normalizeEntry({ skinId: 's', slug: 'a', packageName: 'dsh-cool-skin' })
   assert.equal(npm?.installKind, 'npm')
   assert.equal(npm?.installCommand, 'dsh plugin --profile web add -w dsh-cool-skin')
@@ -50,15 +51,16 @@ test('每条可装的都带上来源类型与手动命令 —— 界面据此换
   })
   assert.equal(tarball?.installKind, 'tarball')
 
-  // 不可装的条目 kind 也一并缺席：两者同生同灭，界面不必分别判空。
+  // Uninstallable entries have no kind either: the two live and die together, so the UI need not null-check them separately.
   const none = normalizeEntry({ skinId: 's', slug: 'd' })
   assert.equal(none?.installKind, undefined)
   assert.equal(none?.installCommand, undefined)
 })
 
-test('🔴 monorepo 的仓库地址不再被硬推成「装整个仓库」', () => {
-  // 21 个皮肤合并成一个仓之后，repoUrl 指向子目录是常态。旧的正则会把它
-  // 推成 `github:org/skins`，用户等完一次 clone 才在挂载那步失败。
+test('🔴 a monorepo repo URL is no longer forced into "install the whole repository"', () => {
+  // Once 21 skins merged into one repository, a repoUrl pointing at a subdirectory became the
+  // norm. The old regex forced it into `github:org/skins`, so the user waited out a clone only
+  // to fail at the mount step.
   const entry = normalizeEntry({
     skinId: 's', slug: 'niulai',
     repoUrl: 'https://github.com/keman-ai/skins/tree/main/packages/niulai',
@@ -67,14 +69,15 @@ test('🔴 monorepo 的仓库地址不再被硬推成「装整个仓库」', () 
   assert.equal(entry?.installKind, undefined)
 })
 
-test('🔴 harness 自己的包换成 github: 写法也挡得住', () => {
-  // 旧的 safeSpec 对整条 spec 做前缀匹配，`github:` 剥掉后剩 `deepseek-ai/dsh-base`，
-  // 不以保留名开头，于是整条溜过去。判定必须落在推导出的包名上。
+test('🔴 a harness package spelled as github: is blocked too', () => {
+  // The old safeSpec prefix-matched the whole spec; stripping `github:` leaves
+  // `deepseek-ai/dsh-base`, which starts with no reserved name and slipped straight through.
+  // The test must run on the derived package name.
   const entry = normalizeEntry({ skinId: 's', slug: 'x', packageName: 'github:deepseek-ai/dsh-base' })
   assert.equal(entry?.installSpec, undefined)
 })
 
-test('作者既可以是字符串也可以是对象', () => {
+test('the author may be either a string or an object', () => {
   assert.equal(normalizeEntry({ skinId: 's', slug: 'x', author: 'someone' })?.author, 'someone')
   const rich = normalizeEntry({
     skinId: 's', slug: 'x',
@@ -84,7 +87,7 @@ test('作者既可以是字符串也可以是对象', () => {
   assert.equal(rich?.authorUrl, 'https://github.com/someone')
 })
 
-test('封面缺失时退到 media 里的 COVER', () => {
+test('a missing cover falls back to the COVER entry in media', () => {
   const entry = normalizeEntry({
     skinId: 's', slug: 'x',
     media: [{ kind: 'SCREENSHOT', url: 'shot.png' }, { kind: 'COVER', url: 'cover.png' }],
@@ -92,12 +95,12 @@ test('封面缺失时退到 media 里的 COVER', () => {
   assert.equal(entry?.iconUrl, 'cover.png')
 })
 
-test('日期统一成 YYYY-MM-DD，认不出的原样截断而不是崩掉', () => {
+test('dates normalise to YYYY-MM-DD; unrecognised ones are truncated verbatim rather than crashing', () => {
   assert.equal(normalizeEntry({ skinId: 's', slug: 'x', releasedAt: '2026-08-16T03:04:05Z' })?.releasedAt, '2026-08-16')
-  assert.equal(normalizeEntry({ skinId: 's', slug: 'x', releasedAt: '不是日期' })?.releasedAt, '不是日期')
+  assert.equal(normalizeEntry({ skinId: 's', slug: 'x', releasedAt: 'not a date' })?.releasedAt, 'not a date')
 })
 
-test('上游返回 HTML（漏了 context-path）时报出可读原因，并回落到快照', async () => {
+test('HTML from upstream (a missing context path) reports a readable reason and falls back to the snapshot', async () => {
   const server = await serve((_req, res) => {
     res.writeHead(200, { 'content-type': 'text/html' })
     res.end('<!doctype html><html></html>')
@@ -111,21 +114,21 @@ test('上游返回 HTML（漏了 context-path）时报出可读原因，并回�
   }
 })
 
-test('业务失败（code 非 OK）不当成空列表 —— HTTP 200 也要验 code', async () => {
+test('a business failure (code other than OK) is not read as an empty list — code must be checked even on HTTP 200', async () => {
   const server = await serve((_req, res) => {
     res.writeHead(200, { 'content-type': 'application/json' })
-    res.end(JSON.stringify({ code: 'SKIN_QUERY_FAILED', message: '数据库连接失败' }))
+    res.end(JSON.stringify({ code: 'SKIN_QUERY_FAILED', message: 'database connection failed' }))
   })
   try {
     const page = await new Catalog(server.origin).page({ page: 1, size: 5 })
     assert.equal(page.source, 'snapshot')
-    assert.match(page.staleReason ?? '', /SKIN_QUERY_FAILED|数据库连接失败/)
+    assert.match(page.staleReason ?? '', /SKIN_QUERY_FAILED|database connection failed/)
   } finally {
     await server.close()
   }
 })
 
-test('正常响应归一化成一页，坏行被跳过而不是整页失败', async () => {
+test('a normal response normalises into a page, with bad rows skipped rather than failing the page', async () => {
   const server = await serve((_req, res) => {
     res.writeHead(200, { 'content-type': 'application/json' })
     res.end(JSON.stringify({
@@ -133,8 +136,8 @@ test('正常响应归一化成一页，坏行被跳过而不是整页失败', as
       data: {
         total: 2,
         items: [
-          { skinId: 's1', slug: 'dsh-cool', name: '酷皮肤', packageName: 'dsh-cool', starCount: 12 },
-          { 没有: 'id' },
+          { skinId: 's1', slug: 'dsh-cool', name: 'Cool Skin', packageName: 'dsh-cool', starCount: 12 },
+          { missing: 'id' },
         ],
       },
     }))
@@ -149,7 +152,7 @@ test('正常响应归一化成一页，坏行被跳过而不是整页失败', as
   }
 })
 
-test('第二次同样的查询走缓存，不再打上游', async () => {
+test('a repeated query is served from cache and never hits upstream again', async () => {
   let hits = 0
   const server = await serve((_req, res) => {
     hits += 1
@@ -166,7 +169,7 @@ test('第二次同样的查询走缓存，不再打上游', async () => {
   }
 })
 
-test('目录里没有的 spec 不放行 —— 安装白名单', async () => {
+test('a spec absent from the catalog is refused — the install allowlist', async () => {
   const server = await serve((_req, res) => {
     res.writeHead(200, { 'content-type': 'application/json' })
     res.end(JSON.stringify({
@@ -183,7 +186,7 @@ test('目录里没有的 spec 不放行 —— 安装白名单', async () => {
   }
 })
 
-/** 起一个一次性 HTTP 服务，返回它的 origin 与关闭函数。 */
+/** Start a throwaway HTTP server, returning its origin and a close function. */
 async function serve(
   handler: (req: import('node:http').IncomingMessage, res: import('node:http').ServerResponse) => void,
 ): Promise<{ origin: string; close: () => Promise<void> }> {
@@ -198,50 +201,50 @@ async function serve(
   }
 }
 
-test('吃集市当前的真实字段形状：authorNickname / tags 数组 / installCommand / coverUrl', () => {
+test("accepts the registry's current field shapes: authorNickname / tags array / installCommand / coverUrl", () => {
   const entry = normalizeEntry({
     skinId: 'skin_01M0',
     slug: 'touhou-hakurei',
-    name: '博丽神社 · 灵梦',
-    tagline: '东方Project 灵梦主题',
+    name: 'Hakurei Shrine · Reimu',
+    tagline: 'A Touhou Project Reimu theme',
     repoUrl: 'https://github.com/xiake595/touhou-hakurei',
     packageName: null,
     installCommand: 'dsh plugin --profile web add github:xiake595/touhou-hakurei',
-    tags: ['二次元', '东方Project'],
-    authorNickname: '本地推理门将',
+    tags: ['anime', 'touhou'],
+    authorNickname: 'local-inference-keeper',
     coverUrl: 'https://example.com/cover.webp',
     updatedAt: '2026-08-18T17:48:33',
     installCount: 3,
   })
-  assert.equal(entry?.author, '本地推理门将')
-  assert.equal(entry?.category, '二次元')
+  assert.equal(entry?.author, 'local-inference-keeper')
+  assert.equal(entry?.category, 'anime')
   assert.equal(entry?.iconUrl, 'https://example.com/cover.webp')
   assert.equal(entry?.installSpec, 'github:xiake595/touhou-hakurei')
   assert.equal(entry?.releasedAt, '2026-08-18')
   assert.equal(entry?.installCount, 3)
 })
 
-test('安装命令里是占位路径时不当成 spec —— 那种只能手动装', () => {
+test('a placeholder path in the install command is not treated as a spec — those install manually only', () => {
   const entry = normalizeEntry({
     skinId: 's', slug: 'x',
-    installCommand: 'dsh plugin --profile web add <克隆路径>',
+    installCommand: 'dsh plugin --profile web add <path to clone>',
   })
   assert.equal(entry?.installSpec, undefined)
 })
 
-test('搜索走集市的 keyword 参数（服务端 LIKE + 分页），不是 q，也不在本地伪过滤', async () => {
+test("search uses the registry's keyword parameter (server-side LIKE + pagination), not q, and never fakes filtering locally", async () => {
   let seen = ''
   const server = await serve((req, res) => {
     seen = req.url ?? ''
     res.writeHead(200, { 'content-type': 'application/json' })
     res.end(JSON.stringify({
       code: 'OK',
-      // 服务端已经筛过了：返回什么就是什么，客户端不得再过滤一遍。
+      // The server already filtered: whatever comes back stands, and the client must not filter again.
       data: { total: 1, page: 2, size: 5, items: [{ skinId: 's1', slug: 'dsh-qq2006', name: 'QQ 2006' }] },
     }))
   })
   try {
-    const page = await new Catalog(server.origin).page({ q: 'qq', sort: 'popular', tag: '怀旧', page: 2, size: 5 })
+    const page = await new Catalog(server.origin).page({ q: 'qq', sort: 'popular', tag: 'retro', page: 2, size: 5 })
     assert.match(seen, /keyword=qq/)
     assert.match(seen, /sort=popular/)
     assert.match(seen, /tag=/)
@@ -254,9 +257,9 @@ test('搜索走集市的 keyword 参数（服务端 LIKE + 分页），不是 q�
   }
 })
 
-test('packageName 填成 harness 自己的包时，宁可标不可装也不照着装', () => {
-  // 线上真实脏数据：packageName 是 @deepseek-ai/dsh-client-ui-conversation，
-  // 而 installCommand 才是对的。
+test('when packageName names a harness package, mark it uninstallable rather than install it as written', () => {
+  // Real dirty data from production: packageName is @deepseek-ai/dsh-client-ui-conversation,
+  // while installCommand is the correct one.
   const entry = normalizeEntry({
     skinId: 's', slug: 'dsh-qq2006',
     packageName: '@deepseek-ai/dsh-client-ui-conversation',
@@ -266,14 +269,14 @@ test('packageName 填成 harness 自己的包时，宁可标不可装也不照�
   assert.equal(entry?.installSpec, 'github:LaplaceYoung/dsh-qq2006')
 })
 
-test('只剩宿主自己的包可选时，这条就是不可装', () => {
+test('when only a host package remains as a candidate, the entry is uninstallable', () => {
   const entry = normalizeEntry({
     skinId: 's', slug: 'x', packageName: '@deepseek-ai/dsh-client-ui-conversation',
   })
   assert.equal(entry?.installSpec, undefined)
 })
 
-test('装机量回报打到 install-hit，且 skinId 做过转义', async () => {
+test('the popularity report hits install-hit with an escaped skinId', async () => {
   const seen: string[] = []
   const server = await serve((req, res) => {
     seen.push(`${req.method} ${req.url}`)
@@ -285,7 +288,7 @@ test('装机量回报打到 install-hit，且 skinId 做过转义', async () => 
     assert.equal(await catalog.reportInstall('skin_01M0A3'), true)
     assert.deepEqual(seen, ['POST /api/v1/public/skins/skin_01M0A3/install-hit'])
 
-    // id 里混进路径字符也不能拼出越界的 URL。
+    // Path characters inside an id must never compose an out-of-bounds URL.
     await catalog.reportInstall('a/../b')
     assert.equal(seen[1], 'POST /api/v1/public/skins/a%2F..%2Fb/install-hit')
   } finally {
@@ -293,11 +296,11 @@ test('装机量回报打到 install-hit，且 skinId 做过转义', async () => 
   }
 })
 
-test('回报失败只返回 false，绝不抛 —— 皮肤已经装好了，不能因埋点把成功报成失败', async () => {
-  // 业务失败（HTTP 200 + code 非 OK）
+test('a failed report returns false and never throws — the skin is installed, and telemetry must not turn success into failure', async () => {
+  // Business failure (HTTP 200 with a code other than OK)
   const soft = await serve((_req, res) => {
     res.writeHead(200, { 'content-type': 'application/json' })
-    res.end(JSON.stringify({ code: 'SKIN_NOT_FOUND', message: '没有这个皮肤' }))
+    res.end(JSON.stringify({ code: 'SKIN_NOT_FOUND', message: 'no such skin' }))
   })
   try {
     assert.equal(await new Catalog(soft.origin).reportInstall('skin_x'), false)
@@ -313,11 +316,11 @@ test('回报失败只返回 false，绝不抛 —— 皮肤已经装好了，不
     await hard.close()
   }
 
-  // 集市根本连不上
+  // The registry is not reachable at all
   assert.equal(await new Catalog('http://127.0.0.1:1').reportInstall('skin_x'), false)
 })
 
-test('findBySpec 命中后把整条给出来，skinId 由目录说了算而不是客户端传', async () => {
+test('findBySpec hands back the whole entry, with skinId decided by the catalog rather than sent by the client', async () => {
   const server = await serve((_req, res) => {
     res.writeHead(200, { 'content-type': 'application/json' })
     res.end(JSON.stringify({
@@ -336,18 +339,18 @@ test('findBySpec 命中后把整条给出来，skinId 由目录说了算而不�
     assert.equal((await catalog.findBySpec('dsh-b'))?.skinId, 'skin_b')
     assert.equal(await catalog.findBySpec('dsh-not-there'), undefined)
     assert.equal(await catalog.allows('dsh-a'), true)
-    assert.equal(await catalog.allows('随便一个包名'), false)
+    assert.equal(await catalog.allows('any-old-package-name'), false)
   } finally {
     await server.close()
   }
 })
 
-test('目录里有装不了的条目时，findBySpec 不会白翻满 10 页', async () => {
+test('with uninstallable entries in the catalog, findBySpec does not needlessly walk all ten pages', async () => {
   let hits = 0
   const server = await serve((_req, res) => {
     hits += 1
     res.writeHead(200, { 'content-type': 'application/json' })
-    // 两条都没有 installSpec：旧实现按「收集到的 spec 数」比 total，永远凑不够，会一路翻到第 10 页。
+    // Neither has an installSpec: the old implementation compared collected specs against total, never reached it, and walked to page ten.
     res.end(JSON.stringify({
       code: 'OK',
       data: { total: 2, items: [{ skinId: 's1', slug: 'a' }, { skinId: 's2', slug: 'b' }] },
@@ -361,7 +364,7 @@ test('目录里有装不了的条目时，findBySpec 不会白翻满 10 页', as
   }
 })
 
-test('安装命令带 -w 时仍能取出 spec —— 集市会在命令里加这个必需 flag', () => {
+test('the spec is still extracted when the command carries -w — the registry adds that required flag', () => {
   const withFlag = normalizeEntry({
     skinId: 's', slug: 'x',
     installCommand: 'dsh plugin --profile web add -w github:owner/repo',

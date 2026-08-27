@@ -1,6 +1,6 @@
 /*
- * 市场页样式。只用 --dsw-alias-* / --dsw-specific-* 语义 token，不写死颜色 ——
- * 这样用户装的任何皮肤都能连带把市场页本身也换掉。
+ * Market page styles. Only --dsw-alias-* / --dsw-specific-* semantic tokens, never hardcoded
+ * colours — so any skin the user installs restyles the market page itself as well.
  */
 
 .root {
@@ -236,9 +236,9 @@
 }
 
 /*
- * 来源徽章。刻意比分类标签更轻（虚线框、无实边），它是给愿意留意的人看的补充信息，
- * 不该跟皮肤自己的分类抢注意力 —— 大多数用户只需要知道「点了要等多久」，
- * 而那句话在 title 里。
+ * Source badge. Deliberately lighter than a category tag (dashed, no solid border): it is extra
+ * information for those who care and must not compete with the skin's own categories — most
+ * users only need to know how long a click will take, and that sentence is in the title.
  */
 .kind {
   border-style: dashed;
@@ -422,8 +422,9 @@
   flex-wrap: wrap;
   gap: 8px;
   /*
-   * 不再限高：第三方皮肤已经不列在这一行（改在「已安装」里点启用），
-   * 这里固定就是跟随系统 / 浅色 / 深色三个，撑不爆也不需要滚。
+   * No height limit any more: third-party skins are no longer listed in this row (they are
+   * enabled from the Installed tab), so it holds exactly follow-system / light / dark, which
+   * can neither overflow nor need scrolling.
    */
 }
 
@@ -470,17 +471,18 @@
 }
 
 
-/* ── 已安装列表 ────────────────────────────────────────────────────────────
-   不复用发现页的卡片：那是等宽网格，而这里的内容宽度差异极大 —— 包名可能很长、
-   spec 是一整条 Release 地址。之前直接套 .card，长包名被挤成一列竖排的字。 */
+/* ── Installed list ────────────────────────────────────────────────────────
+   The Discover card is not reused: that is an equal-width grid, while content widths here vary
+   enormously — package names can be long and a spec is a whole Release URL. Applying .card
+   directly once squeezed long package names into a single vertical column of characters. */
 
 .installedList {
   display: flex;
   flex-direction: column;
   gap: 10px;
   /*
-   * 不设自己的高度上限，也不自己滚：外层 .list 已经是可滚动区域，
-   * 这里再套一层就成了嵌套的双滚动条 —— 又难看又难用。
+   * No height limit and no scrolling of its own: the outer .list is already scrollable, and
+   * another layer here would nest two scrollbars — ugly and hard to use.
    */
 }
 
@@ -495,9 +497,9 @@
   background: var(--dsw-alias-fill-l1);
 }
 
-/* min-width:0 是关键：flex 子项默认 min-width:auto，长内容会把整行顶宽 */
-/* 皮肤预览图。宽一点（16:10）而不是方形 —— 皮肤的封面本来就是整屏视觉，
-   裁成正方形反而看不出是哪一套。 */
+/* min-width:0 is the key: flex items default to min-width:auto, and long content stretches the whole row */
+/* Skin preview. Wide (16:10) rather than square — a skin's cover is a full-screen visual, and
+   cropping it square makes it unrecognisable. */
 .installedIcon {
   flex: 0 0 auto;
   width: 72px;
@@ -508,7 +510,7 @@
   object-fit: cover;
 }
 
-/* 没有预览图的包：藏掉裂图，留一个同尺寸的空位，行高不跳 */
+/* Packages with no preview: hide the broken image and keep a same-sized gap so row height does not jump */
 .iconMissing {
   object-fit: none;
   color: transparent;
@@ -538,7 +540,7 @@
   color: var(--dsw-alias-label-tertiary);
 }
 
-/* 生效中的那一套，用颜色点一下就够，不另起一块 badge */
+/* The active one needs only a touch of colour, not a badge of its own */
 .activeMark { color: var(--dsw-alias-state-success-primary); }
 
 .installedActions {
@@ -548,7 +550,7 @@
   flex: 0 0 auto;
 }
 
-/* 这一行的按钮比发现页的小一号：这里一行两颗，发现页一张卡一颗 */
+/* Buttons here are one size smaller than on Discover: two per row here, one per card there */
 .installedActions .primary,
 .installedActions .ghost {
   min-width: 0;

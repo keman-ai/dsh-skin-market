@@ -1,9 +1,11 @@
 name: Build & Release
 
-# 这个仓与 dsh-skin-pack 不同：用户装它走 github:keman-ai/dsh-skin-market（git 源），
-# 所以 lib/ 必须提交进仓库、CI 也不负责分发。这里发 Release 是为了两件事：
-#   · 给想固定版本的人一个 tarball（比 clone 整个仓库快，也不触发构建脚本授权）
-#   · 让版本号有一个可追溯的标记 —— 之前改了什么、什么时候发的
+# Unlike dsh-skin-pack, users install this repo via github:keman-ai/dsh-skin-market
+# (a git source), so lib/ must be committed and CI does not handle distribution.
+# Releases exist here for two reasons:
+#   - a tarball for anyone pinning a version (faster than cloning, and it triggers
+#     no build-script authorisation)
+#   - a traceable marker per version: what changed, and when it shipped
 on:
   push:
     branches: [main]
@@ -19,16 +21,17 @@ jobs:
   build:
     runs-on: ubuntu-latest
     permissions:
-      contents: write # 建 Release 要写权限
+      contents: write # creating a Release needs write access
     steps:
       - uses: actions/checkout@v4
 
-      # 不写 version：action 会同时读 package.json 的 packageManager，
-      # 两处都指定它直接报 Multiple versions of pnpm specified
+      # No version here: the action also reads packageManager from package.json, and
+      # specifying both fails with "Multiple versions of pnpm specified"
       - uses: pnpm/action-setup@v4
 
-      # 跟开发机对齐。lib/ 是提交进仓库的，下面那道闸要逐字节比对构建产物 ——
-      # Node 大版本不同产出就可能不同，闸会变成误报
+      # Match the dev machine. lib/ is committed and the gate below compares build output
+      # byte for byte — a different Node major can change the output and turn the gate
+      # into a false alarm
       - uses: actions/setup-node@v4
         with:
           node-version: 24
@@ -45,12 +48,13 @@ jobs:
       - name: Build
         run: pnpm build
 
-      # lib/ 是提交进仓库的（git 源安装依赖它）。构建后若与提交的版本不一致，
-      # 说明有人改了源码没跟着提交产物 —— 那样用户装到的就是旧代码，必须拦下
+      # lib/ is committed (git-source installs depend on it). If a build disagrees with
+      # what was committed, someone changed source without committing output — users
+      # would install stale code, so this must fail
       - name: Assert lib/ is up to date
         run: |
           if ! git diff --quiet -- lib; then
-            echo "::error::lib/ 与源码不同步。本地跑 pnpm build 并把 lib/ 一并提交"
+            echo "::error::lib/ is out of sync with the source. Run pnpm build locally and commit lib/ too"
             git diff --stat -- lib
             exit 1
           fi

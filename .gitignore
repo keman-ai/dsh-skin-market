@@ -2,7 +2,8 @@ node_modules/
 *.tsbuildinfo
 .DS_Store
 
-# lib/ 是**故意提交**的：用户 clone 下来要能直接安装，不必先构建。
-# git 源安装时 pnpm 默认拒绝执行 prepare 构建脚本，不带产物的包装进 dsh
-# 会因缺少入口文件而让它起不来 —— 集市里已经有皮肤栽在这上面。
-# 改完代码记得 pnpm build 后把 lib/ 一起提交。
+# lib/ is committed **on purpose**: a clone must be installable without building first.
+# For git sources pnpm refuses to run prepare by default, so a package without build
+# output is missing its entry file and stops dsh from starting — skins in the market
+# have already been caught by this.
+# After changing code, run pnpm build and commit lib/ along with it.

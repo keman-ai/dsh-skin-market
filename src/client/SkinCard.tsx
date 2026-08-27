@@ -1,4 +1,4 @@
-/** 目录里的一张皮肤卡片：信息、源码入口、安装按钮，以及安装过程与失败的原地反馈。 */
+/** One skin card from the catalog: information, a source link, the install button, and in-place feedback for progress and failure. */
 
 import { useState } from 'react'
 import type { JSX } from 'react'
@@ -6,36 +6,38 @@ import type { SkinEntry } from '../types.ts'
 import type { CardState } from './card-state.ts'
 import styles from './market.module.css'
 
-/** 卡片入参。 */
+/** Card props. */
 export interface SkinCardProps {
   readonly entry: SkinEntry
-  /** 本机是否已装。 */
+  /** Whether it is installed on this machine. */
   readonly installed: boolean
-  /** 这张卡当前的安装/卸载状态。 */
+  /** This card's current install/uninstall state. */
   readonly state: CardState
   readonly t: (key: string, params?: Record<string, string | number>) => string
   readonly onInstall: (entry: SkinEntry) => void
   readonly onUninstall: (entry: SkinEntry) => void
-  /** 用户在构建脚本告警上明确同意后触发。 */
+  /** Fired after the user explicitly consents on the build-script warning. */
   readonly onAllowBuilds: (entry: SkinEntry) => void
   readonly onDismiss: (entry: SkinEntry) => void
 }
 
 /**
- * 卡片状态的键。用安装 spec 而不是包名：真实包名要装完才知道
- * （`github:LaplaceYoung/dsh-qq2006` 装出来叫 `@dsh-external/dsh-qq2006`），
- * 猜出来的名字既对不上已装列表，也没法用来卸载。
+ * Key for card state. The install spec, not the package name: the real name is known only
+ * after installing (`github:LaplaceYoung/dsh-qq2006` installs as
+ * `@dsh-external/dsh-qq2006`), and a guessed name neither matches the installed list nor
+ * works for uninstalling.
  */
 export function cardKeyOf(entry: SkinEntry): string {
   return entry.installSpec ?? entry.skinId
 }
 
 /**
- * 来源徽章：这条皮肤是从哪儿装的。
+ * Source badge: where this skin installs from.
  *
- * 放在卡片上而不是只放在提示里，是因为 git 源和发布物的等待时间差着一个数量级
- * （clone 一个内嵌素材的皮肤仓要几分钟，拉一个 tarball 是几秒），
- * 用户有权在点下去之前就知道自己要等多久、会不会被要求授权。
+ * On the card rather than only in a tooltip, because a git source and a published artefact
+ * differ by an order of magnitude in waiting time (cloning a skin repo with embedded assets
+ * takes minutes; fetching a tarball takes seconds). Users deserve to know how long they will
+ * wait, and whether consent will be demanded, before they click.
  */
 function sourceBadge(entry: SkinEntry, t: SkinCardProps['t']): JSX.Element | false {
   if (entry.installKind === undefined) return false
@@ -50,11 +52,11 @@ function sourceBadge(entry: SkinEntry, t: SkinCardProps['t']): JSX.Element | fal
 }
 
 /**
- * 「复制安装命令」：自动安装失败之后的兜底出口。
+ * "Copy install command": the fallback when an automatic install fails.
  *
- * 命令按来源各不相同（一个短包名、一条 github: spec、或一串 Release 附件 URL），
- * 后者长到没法照着敲，所以这颗按钮不是锦上添花 —— tarball 来源的皮肤，
- * 手动安装几乎只能靠复制。
+ * The command differs by source (a short package name, a github: spec, or a long Release asset
+ * URL), and the last is too long to retype. So this button is not a nicety — for tarball-sourced
+ * skins, copying is very nearly the only way to install manually.
  */
 function CopyCommandButton(
   { entry, t }: { readonly entry: SkinEntry; readonly t: SkinCardProps['t'] },
@@ -67,10 +69,10 @@ function CopyCommandButton(
 
   const copy = (): void => {
     /*
-     * 非安全上下文下 `navigator.clipboard` 整个不存在 —— dsh 默认跑在
-     * http://127.0.0.1 上算安全上下文，但用户把 webServer 绑到 0.0.0.0
-     * 再从局域网另一台机器访问时就不是了。lib.dom 把它声明成非空，
-     * 所以这里显式收一次，否则那种场景下点击毫无反应。
+     * Outside a secure context `navigator.clipboard` does not exist at all — dsh's default
+     * http://127.0.0.1 counts as secure, but binding the webServer to 0.0.0.0 and browsing from
+     * another machine on the LAN does not. lib.dom declares it non-nullable, so it is checked
+     * explicitly here; otherwise the click does nothing in that case.
      */
     const clipboard = navigator.clipboard as Clipboard | undefined
     if (clipboard === undefined) return fallback()
@@ -87,7 +89,7 @@ function CopyCommandButton(
   )
 }
 
-/** 主按钮：一个按钮走完 安装 → 安装中 → 刷新生效 / 已装 → 卸载。 */
+/** Primary button: one button carries install → installing → refresh to apply / installed → uninstall. */
 function actionButton(props: SkinCardProps): JSX.Element {
   const { entry, installed, state, t, onInstall, onUninstall } = props
 
@@ -116,7 +118,7 @@ function actionButton(props: SkinCardProps): JSX.Element {
       </button>
     )
   }
-  // 目录里没登记安装地址的条目：按钮直接禁用并说明，而不是点了才失败。
+  // Entries with no registered install URL: disable the button and explain, rather than failing after the click.
   if (entry.installSpec === undefined) {
     return (
       <button className={styles.primary} type="button" disabled title={t('card.noSpecHint')}>
@@ -124,7 +126,7 @@ function actionButton(props: SkinCardProps): JSX.Element {
       </button>
     )
   }
-  // 按来源换提示语：git 源要 clone 再构建，说清楚了用户才知道该等而不是该重试。
+  // Wording follows the source: a git source clones then builds, and saying so tells the user to wait rather than retry.
   const hint = entry.installKind === undefined ? undefined : t(`kind.${entry.installKind}.hint`)
   return (
     <button
@@ -139,9 +141,9 @@ function actionButton(props: SkinCardProps): JSX.Element {
 }
 
 /**
- * 渲染一张卡片。
- * @param props - 条目、状态与回调。
- * @returns 卡片元素。
+ * Render one card.
+ * @param props - Entry, state and callbacks.
+ * @returns The card element.
  */
 export function SkinCard(props: SkinCardProps): JSX.Element {
   const { entry, state, t, onAllowBuilds, onDismiss } = props
@@ -186,9 +188,10 @@ export function SkinCard(props: SkinCardProps): JSX.Element {
           {state.detail !== undefined && <div>{state.detail}</div>}
           <div className={styles.errorActions}>
             {/*
-              构建脚本授权是唯一需要用户点头的分支：点头等于允许该包代码在本机执行。
-              只有 git 源配得上这个出口 —— npm 包和 tarball 装的是发布物，
-              它们报这个错是包自己有毛病，给授权按钮等于把用户往错误的方向推。
+              Authorising build scripts is the only branch that needs user consent, because consent
+              permits that package's code to run locally. Only a git source deserves this escape
+              hatch — npm packages and tarballs install published artefacts, so this error means
+              the package itself is broken, and offering the button pushes the user the wrong way.
             */}
             {state.code === 'BUILD_SCRIPT_BLOCKED' && entry.installKind === 'github' && (
               <button className={styles.primary} type="button" onClick={() => { onAllowBuilds(entry) }}>
@@ -196,8 +199,9 @@ export function SkinCard(props: SkinCardProps): JSX.Element {
               </button>
             )}
             {/*
-              手动安装是所有失败的兜底出口：终端里 pnpm 有 TTY，进度看得见，
-              授权与否也由用户自己在命令行上决定，不必绕回这个界面。
+              Manual installation is the fallback for every failure: in a terminal pnpm has a TTY, so
+              progress is visible, and consent is decided on the command line without coming back
+              through this UI.
             */}
             <CopyCommandButton entry={entry} t={t} />
             <button className={styles.ghost} type="button" onClick={() => { onDismiss(entry) }}>

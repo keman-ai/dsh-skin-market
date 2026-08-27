@@ -1,12 +1,13 @@
 /**
- * client 半：把皮肤市场注册成 Settings 里的一页。
+ * Client half: registers the skin market as a page in Settings.
  *
- * 用 settings.section 而不是挤进 settings.plugins.tab —— 皮肤市场是一件独立的事，
- * 不是插件管理的一个子页。
+ * It uses settings.section rather than squeezing into settings.plugins.tab — the skin
+ * market is its own thing, not a sub-page of plugin management.
  */
 
-// 只为把设置外壳的 slot 声明（settings.section）与 ctx.locale 的合并拉进编译面；
-// 跨插件协作走服务，绝不做值导入（client bundle 的纯净性门禁会拦）。
+// Type-only, purely to bring the settings shell's slot declaration (settings.section)
+// and the ctx.locale merge into the compilation surface. Cross-plugin collaboration goes
+// through services; never a value import (the client bundle purity gate blocks it).
 import type {} from '@deepseek-ai/dsh-client-ui-settings/client'
 import type {} from '@deepseek-ai/dsh-client-locale/client'
 import type { ClientContext, ThemeRuntime } from '@deepseek-ai/dsh-client-runtime/client'
@@ -20,18 +21,18 @@ export type { SkinMarketInjected } from './SkinMarketSection.tsx'
 export type { MarketApi } from './api.ts'
 export type { CardState } from './card-state.ts'
 
-/** 本插件拥有的词典命名空间。 */
+/** The locale namespace this plugin owns. */
 export const NS = 'settings.skinMarket'
 
-/** 插件版本，页头展示。发版时与 package.json 一起改。 */
+/** Plugin version, shown in the page header. Bump it together with package.json. */
 const VERSION = '0.1.0'
 
-/** 需要的浏览器侧服务。 */
+/** Browser-side services required. */
 export const inject = ['slots', 'locale']
 
 /**
- * 挂载市场页。
- * @param ctx - 浏览器插件上下文。
+ * Mount the market page.
+ * @param ctx - Browser plugin context.
  */
 export function apply(ctx: ClientContext): void {
   ctx.effect(() => ctx.locale.register(NS, { zh, en }), 'skin-market: dictionaries')
@@ -39,11 +40,11 @@ export function apply(ctx: ClientContext): void {
   const t = ctx.locale.bind(NS)
   const api = createApi()
 
-  // ui-theme 是 web 组合的标配，但不做硬依赖：没有它时市场照样能逛能装，
-  // 只是不提供「应用皮肤」那一步。
+  // ui-theme ships with the web bundle but is not a hard dependency: without it the
+  // market still browses and installs, it just cannot offer the "apply skin" step.
   const theme = ctx.get<ThemeRuntime>('theme')
   if (theme !== undefined) {
-    // 第三方主题 id 不进 Host settings，重启后得由我们把上次的选择放回去。
+    // Third-party theme ids never reach Host settings, so we restore the last choice after a restart.
     ctx.effect(() => restoreSaved(ctx, theme), 'skin-market: restore selected skin')
   }
 
@@ -57,7 +58,7 @@ export function apply(ctx: ClientContext): void {
     api, t, version: VERSION, ...(appearance === undefined ? {} : { appearance }),
   })
 
-  // slots.inject 跟随 slot 的延迟声明与重新声明，因此不必 import 设置外壳。
+  // slots.inject follows the slot's late declaration and re-declaration, so the settings shell need not be imported.
   ctx.slots.inject('settings.section', () => ctx.slots.register({
     name: 'settings.section',
     id: 'skin-market',

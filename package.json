@@ -1,7 +1,7 @@
 {
   "name": "dsh-skin-market",
   "version": "0.1.0",
-  "description": "DSH 里的皮肤市场：搜索并一键安装 dsh.a2hmarket.ai 上的社区皮肤",
+  "description": "Skin marketplace inside DSH: search and one-click install community skins from dsh.a2hmarket.ai",
   "keywords": [
     "dsh",
     "deepseek-harness",

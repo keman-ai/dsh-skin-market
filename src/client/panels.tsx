@@ -1,4 +1,4 @@
-/** 「已安装」与「诊断」两个 tab 的内容。两者都不依赖集市，断网可用。 */
+/** Contents of the Installed and Diagnostics tabs. Neither depends on the registry; both work offline. */
 
 import type { JSX } from 'react'
 import type { Diagnostics, InstalledSkin } from '../types.ts'
@@ -8,33 +8,33 @@ import styles from './market.module.css'
 
 type Translate = (key: string, params?: Record<string, string | number>) => string
 
-/** 外观区块入参。 */
+/** Appearance section props. */
 export interface AppearancePickerProps {
   readonly options: readonly AppearanceOption[]
   readonly t: Translate
   readonly onSelect: (id: string) => void
 }
 
-/** 内置项有本地化名字；皮肤注册的主题按它自己的 id 显示。 */
+/** Built-ins have localised names; a skin's theme is shown under its own id. */
 const BUILTIN_LABEL: Record<string, string> = {
   system: 'appearance.system',
   light: 'appearance.light',
   dark: 'appearance.dark',
 }
 
-/** 内置项翻译，皮肤主题原样显示自己的 id。 */
+/** Translations for built-ins; skin themes display their id verbatim. */
 function labelOf(id: string, t: Translate): string {
   const key = BUILTIN_LABEL[id]
   return key === undefined ? id : t(key)
 }
 
 /**
- * 外观选择器 —— 皮肤装上之后真正生效的那一步。
+ * The appearance picker — the step that actually makes an installed skin take effect.
  *
- * dsh 自己的外观行只渲染三个内置项，皮肤注册进主题服务后没有界面能选中它。
- * 这里把注册表里的全部主题列出来。
- * @param props - 选项、文案与回调。
- * @returns 区块元素。
+ * dsh's own appearance row renders only the three built-ins, so once a skin registers with the
+ * theme service no UI can select it. This lists every theme in the registry.
+ * @param props - Options, copy and callbacks.
+ * @returns The section element.
  */
 export function AppearancePicker({ options, t, onSelect }: AppearancePickerProps): JSX.Element {
   return (
@@ -61,22 +61,22 @@ export function AppearancePicker({ options, t, onSelect }: AppearancePickerProps
   )
 }
 
-/** 已安装面板入参。 */
+/** Installed panel props. */
 export interface InstalledPanelProps {
   readonly items: readonly InstalledSkin[]
   readonly states: ReadonlyMap<string, CardState>
   readonly t: Translate
   readonly onUninstall: (packageName: string) => void
-  /** 当前生效的主题 id；用来标出哪一套是启用中的。 */
+  /** The active theme id, used to mark which skin is enabled. */
   readonly activeThemeId?: string
-  /** 启用某套皮肤。主题是单选的，所以切过去就等于把别的换下来。 */
+  /** Enable a skin. Themes are single-select, so switching to one replaces the other. */
   readonly onEnable: (themeId: string) => void
 }
 
 /**
- * 本机已装皮肤。
- * @param props - 列表、状态与回调。
- * @returns 面板元素。
+ * Skins installed on this machine.
+ * @param props - List, state and callbacks.
+ * @returns The panel element.
  */
 export function InstalledPanel(
   { items, states, t, onUninstall, activeThemeId, onEnable }: InstalledPanelProps,
@@ -99,8 +99,9 @@ export function InstalledPanel(
         return (
           <article className={styles.installedRow} key={item.packageName}>
             {/*
-              图标走 host 的本地路由，不用集市的 iconUrl —— 这一屏的定位是断网也能管，
-              图标不该是唯一要联网的东西。没有预览图的包回 404，onError 换回占位符。
+              Icons come from the host's local route rather than the registry's iconUrl — this screen
+              exists to work offline, and an icon should not be the one thing that needs the network.
+              A package with no preview returns 404, and onError swaps in the placeholder.
             */}
             <img
               className={styles.installedIcon}
@@ -111,9 +112,10 @@ export function InstalledPanel(
             />
             <div className={styles.installedMain}>
               {/*
-                完整的安装地址挂在 title 里，不占一行。
-                它是调试信息 —— 想看的人在诊断页能看到完整输出，
-                而常驻显示一条带横向滚动条的长 URL 只是把这一行弄脏。
+                The full install URL lives in the title rather than taking a line of its own.
+                It is debugging information — anyone who wants it can read the full output on the
+                Diagnostics tab, whereas a permanently displayed long URL with a horizontal
+                scrollbar only makes this row messy.
               */}
               <h3
                 className={styles.installedName}
@@ -143,15 +145,16 @@ export function InstalledPanel(
                 : (
                   <>
                     {/*
-                      读不到 themeId 的包不给启用按钮：那是没按规范写 skin.json 的皮肤，
-                      猜一个 id 去 setTheme 只会切不过去，还查不出原因
+                      No enable button for packages whose themeId cannot be read: those skins did not write
+                      skin.json to spec, and guessing an id for setTheme simply fails to switch with
+                      no diagnosable reason
                     */}
                     {item.themeId !== undefined && (
                       <button
                         className={active ? styles.ghost : styles.primary}
                         type="button"
                         disabled={busy}
-                        // 停用 = 切回跟随系统。皮肤仍然装着，只是不再生效
+                        // Disable = switch back to follow-system. The skin stays installed, it just stops applying
                         onClick={() => { onEnable(active ? 'system' : item.themeId!) }}
                       >
                         {t(active ? 'installed.disable' : 'installed.enable')}
@@ -186,7 +189,7 @@ export function InstalledPanel(
   )
 }
 
-/** 诊断面板入参。 */
+/** Diagnostics panel props. */
 export interface DiagnosticsPanelProps {
   readonly data: Diagnostics | undefined
   readonly t: Translate
@@ -200,9 +203,9 @@ const STATUS_CLASS = {
 } as const
 
 /**
- * 环境自查：pnpm、profile、集市连通性、上次安装输出。
- * @param props - 数据与刷新回调。
- * @returns 面板元素。
+ * Environment self-check: pnpm, profile, registry connectivity, and the last install output.
+ * @param props - Data and the refresh callback.
+ * @returns The panel element.
  */
 export function DiagnosticsPanel({ data, t, onRefresh }: DiagnosticsPanelProps): JSX.Element {
   if (data === undefined) return <div className={styles.empty}>{t('diag.loading')}</div>
@@ -213,7 +216,7 @@ export function DiagnosticsPanel({ data, t, onRefresh }: DiagnosticsPanelProps):
         <div className={styles.diagRow} key={row.key}>
           <span className={styles.diagKey}>{row.key}</span>
           <span className={styles.diagValue}>{row.value}</span>
-          <span className={STATUS_CLASS[row.status]}>{row.status === 'ok' ? '正常' : row.status === 'warn' ? '注意' : '异常'}</span>
+          <span className={STATUS_CLASS[row.status]}>{row.status === 'ok' ? 'ok' : row.status === 'warn' ? 'check' : 'error'}</span>
           {row.hint !== undefined && <span className={styles.hint}>{row.hint}</span>}
         </div>
       ))}

@@ -1,11 +1,11 @@
-/** 单张卡片的安装/卸载状态机，与它的归约函数。 */
+/** The install/uninstall state machine for one card, and its reducer. */
 
 import type { InstallErrorCode, InstallEvent } from '../types.ts'
 
-/** 正在进行的动作。 */
+/** The action in progress. */
 export type CardVerb = 'install' | 'uninstall'
 
-/** 一张卡片的当前状态。 */
+/** Current state of one card. */
 export type CardState =
   | { readonly kind: 'idle' }
   | { readonly kind: 'working'; readonly verb: CardVerb; readonly log: readonly string[] }
@@ -18,18 +18,18 @@ export type CardState =
     readonly log: readonly string[]
   }
 
-/** 空闲态常量，省得到处新建对象。 */
+/** Idle constant, so we do not allocate a new object everywhere. */
 export const IDLE: CardState = { kind: 'idle' }
 
-/** 日志只留尾部：安装输出可能上百行，界面里没人会往上翻那么多。 */
+/** Keep only the tail of the log: install output can run to hundreds of lines and nobody scrolls that far. */
 const LOG_LIMIT = 60
 
 /**
- * 把一条过程事件归约进卡片状态。
- * @param state - 当前状态。
- * @param event - 收到的事件。
- * @param verb - 本次动作。
- * @returns 新状态。
+ * Reduce one progress event into the card state.
+ * @param state - Current state.
+ * @param event - The event received.
+ * @param verb - The action being performed.
+ * @returns The new state.
  */
 export function reduce(state: CardState, event: InstallEvent, verb: CardVerb): CardState {
   const log = state.kind === 'working' || state.kind === 'error' ? state.log : []

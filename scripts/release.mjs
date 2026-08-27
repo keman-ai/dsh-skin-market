@@ -1,10 +1,10 @@
 /**
- * 版本号还没发过就打个 tarball 挂上 Release。
+ * If a version has not shipped yet, pack a tarball and attach it to a Release.
  *
- * 「发过没发过」以 Release tag 是否存在为准，不看本地 git tag：CI 的 checkout
- * 不带全部 tag，拿本地状态判断会重复发。
+ * "Already shipped?" is decided by whether the Release tag exists, not by local git
+ * tags: CI checkouts do not fetch every tag, so local state would ship duplicates.
  *
- * 单包仓库，所以 tag 就是 v<版本>，不像 dsh-skin-pack 那样要带包名前缀。
+ * Single-package repo, so the tag is just v<version> — no package-name prefix as in dsh-skin-pack.
  */
 
 import { execFileSync } from 'node:child_process'
@@ -17,16 +17,17 @@ const tag = `v${pkg.version}`
 
 try {
   sh('gh', ['release', 'view', tag], { stdio: ['ignore', 'pipe', 'ignore'] })
-  console.log(`${tag} 已经发过了，跳过`)
+  console.log(`${tag} already shipped, skipping`)
   process.exit(0)
 } catch {
-  // 没发过，继续
+  // Not shipped yet, continue
 }
 
-// npm pack 不跑 prepublishOnly（npm 7+ 起它只在 npm publish 时触发），
-// 所以构建必须在这之前独立跑过 —— 漏了会打出一个没有 lib/ 的空壳
+// npm pack does not run prepublishOnly (since npm 7 it fires only on npm publish),
+// so the build must have run separately beforehand — skipping it packs an empty shell
+// with no lib/
 if (!existsSync('lib/index.js') || !existsSync('lib/client.js')) {
-  console.error('lib/ 里缺构建产物，先跑 pnpm build')
+  console.error('lib/ has no build output — run pnpm build first')
   process.exit(1)
 }
 
@@ -36,14 +37,14 @@ sh('gh', ['release', 'create', tag, file,
   '--notes', [
     `**${pkg.description ?? pkg.name}**`,
     '',
-    '装它（推荐，跟着 main 走）：',
+    'Install (recommended, tracks main):',
     '```sh',
     'dsh plugin --profile web add -w github:keman-ai/dsh-skin-market',
     '```',
     '',
-    '或固定到这个版本：',
+    'Or pin this version:',
     '```sh',
-    `dsh plugin --profile web add -w <本页 ${file} 的下载地址>`,
+    `dsh plugin --profile web add -w <download URL of ${file} on this page>`,
     '```',
   ].join('\n'),
 ])

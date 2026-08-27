@@ -1,13 +1,13 @@
 <h1 align="center">DSH Skin Market</h1>
 
 <p align="center">
-  <strong>在 <a href="https://github.com/deepseek-ai/deepseek-harness">DeepSeek Harness</a> 里搜皮肤、点一下装上。</strong><br>
-  装一次，之后换皮肤不用再回终端。
+  <strong>Search for skins inside <a href="https://github.com/deepseek-ai/deepseek-harness">DeepSeek Harness</a> and install them with one click.</strong><br>
+  Install it once, and changing skins never sends you back to the terminal.
 </p>
 
 <p align="center">
   <a href="https://dsh.a2hmarket.ai"><strong>dsh.a2hmarket.ai</strong></a>
-  —— 皮肤目录来自这里，免登录
+  — where the skin catalog comes from, no login required
 </p>
 
 <p align="center">
@@ -17,145 +17,150 @@
 </p>
 
 <p align="center">
-  <b>如果喜欢就给个 Star 鼓励我们一下吧</b>
+  <b>English</b> · <a href="README.zh-CN.md">简体中文</a>
 </p>
 
-## 三个页签
+<p align="center">
+  <b>If this is useful to you, a Star goes a long way</b>
+</p>
+
+## Three tabs
 
 <table>
   <tr>
     <td width="50%" valign="top">
-      <img src="plugin_list.png" alt="发现：搜索社区皮肤，卡片上标着来源与等待成本" width="100%">
+      <img src="plugin_list.png" alt="Discover: search community skins, with source and waiting cost on each card" width="100%">
     </td>
     <td width="50%" valign="top">
-      <img src="plugin_install.png" alt="已安装：启用 / 停用 / 卸载，读本机 profile" width="100%">
+      <img src="plugin_install.png" alt="Installed: enable / disable / uninstall, read from the local profile" width="100%">
     </td>
   </tr>
   <tr>
     <td valign="top">
-      <h3>发现</h3>
-      <p>搜索、排序、一键安装。卡片上标着这套皮肤是<strong>预构建包</strong>还是<strong>源码构建</strong>——点下去要等几秒还是几分钟，在点之前就知道。</p>
+      <h3>Discover</h3>
+      <p>Search, sort, install in one click. Each card states whether the skin is a <strong>prebuilt package</strong> or <strong>built from source</strong> — so you know whether the click costs seconds or minutes before you make it.</p>
     </td>
     <td valign="top">
-      <h3>已安装</h3>
-      <p>版本、主题 id、<strong>启用 / 停用</strong>、卸载。读的是本机 profile，<strong>断网也能管</strong>；连预览图都走本地，不额外联网。</p>
+      <h3>Installed</h3>
+      <p>Version, theme id, <strong>enable / disable</strong>, uninstall. It reads the local profile, so it <strong>works offline</strong> — even the previews are served locally, with no extra network use.</p>
     </td>
   </tr>
 </table>
 
 <p align="center">
-  <sub><b>诊断</b>　·　pnpm、profile 路径、集市连通性、上次安装的完整输出 —— 装不上时先看这一屏，比截图有用得多</sub>
+  <sub><b>Diagnostics</b>　·　pnpm, the profile path, registry connectivity and the full output of the last install — the first screen to check when something will not install, and far more useful than a screenshot</sub>
 </p>
 
-> **本站官方皮肤的源码都在 [dsh-skin-pack](https://github.com/keman-ai/dsh-skin-pack)。**
+> **The source of every official skin on the site lives in [dsh-skin-pack](https://github.com/keman-ai/dsh-skin-pack).**
 
-## 安装
+## Install
 
 ```sh
 dsh plugin --profile web add -w github:keman-ai/dsh-skin-market
 ```
 
-重启一次 dsh，打开 **设置 → 皮肤市场**。
+Restart dsh once, then open **Settings → Skin Market**.
 
 ```sh
 dsh --profile web
 ```
 
-**此后装皮肤只要刷新页面，不用再重启，也不用再敲命令。**
+**From then on, installing a skin only takes a page refresh — no restart, no commands.**
 
-> **`-w` 不能省。** profile 目录自带 `pnpm-workspace.yaml`，pnpm 因此认定它是 workspace 根并拒绝安装（`ERR_PNPM_ADDING_TO_ROOT`）。`-w` 就是「我确实要装到根」的声明；`dsh plugin` 会把它原样转发给 pnpm。pnpm 8 和 10 都需要。
+> **`-w` is not optional.** The profile directory ships a `pnpm-workspace.yaml`, so pnpm reads it as a workspace root and refuses to install (`ERR_PNPM_ADDING_TO_ROOT`). `-w` is the "yes, install into the root" declaration, and `dsh plugin` forwards it to pnpm verbatim. Both pnpm 8 and 10 need it.
 
-仓库里带着构建产物（`lib/`），也没有 `prepare` 脚本，所以从 git 源安装时 pnpm 不需要执行任何构建脚本，你不必为它授权 `allowBuilds`。
+The repository ships its build output (`lib/`) and has no `prepare` script, so pnpm runs no build script when installing from a git source and you never have to grant `allowBuilds`.
 
-从 harness 源码运行的话，把上面两条 `dsh` 换成在 harness 目录里跑 `pnpm dsh`。
+If you run harness from source, replace both `dsh` commands above with `pnpm dsh` inside the harness directory.
 
-### 卸载
+### Uninstall
 
 ```sh
 dsh plugin --profile web remove dsh-skin-market
 ```
 
-用市场装的皮肤不会跟着消失 —— 它们是 profile 里独立的依赖，在市场页的「已安装」里单独卸。
+Skins installed through the market do not disappear with it — they are independent dependencies in the profile, uninstalled individually from the market's Installed tab.
 
-## 运行环境
+## Requirements
 
-**只逛**只要有 dsh 和网络。**要装皮肤**才需要那几个命令行工具，因为安装本质上就是替你跑 `pnpm`。
+**Browsing** needs only dsh and a network. **Installing** is what needs the command-line tools, because installing is fundamentally running `pnpm` on your behalf.
 
-| 依赖 | 要求 | 少了会怎样 |
+| Dependency | Requirement | What happens without it |
 |---|---|---|
-| **DeepSeek Harness** | `0.1.0-rc.6+`（实测 rc.7） | 更早的版本没有 `settings.section` 与浏览器模块表，插件挂不上 |
-| **profile** | 必须是 **web** profile | headless / tui 组合里没有 `webServer`，插件不会激活 |
-| **Node.js** | `>= 20`（实测 24） | dsh 自己的要求，插件不额外抬高 |
-| **pnpm** | 在 `PATH` 上（实测 8.15 与 10） | 只影响安装。诊断页标红，安装按钮明确报错，浏览和搜索照常 |
-| **git** | 装 GitHub 源皮肤才要 | 目录里多数皮肤已改用 Release tarball（不需要 git），只有少数仍是 `github:owner/repo` 源 |
-| **网络** | `dsh.a2hmarket.ai`；装 GitHub 源皮肤还要 `github.com` | 集市连不上会回落到缓存 / 随包快照并在页面说明 |
-| **浏览器** | 装皮肤要求**本机直连**（loopback） | 远程访问时能逛能搜，安装被拒 |
+| **DeepSeek Harness** | `0.1.0-rc.6+` (tested on rc.7) | Earlier versions lack `settings.section` and the browser module table, so the plugin cannot mount |
+| **profile** | Must be the **web** profile | headless / tui bundles have no `webServer`, so the plugin never activates |
+| **Node.js** | `>= 20` (tested on 24) | dsh's own requirement; the plugin does not raise it |
+| **pnpm** | On `PATH` (tested on 8.15 and 10) | Affects installing only. Diagnostics flags it red and the install button reports a clear error, while browsing and search continue |
+| **git** | Only for GitHub-source skins | Most catalog skins now use Release tarballs (no git needed); only a few remain `github:owner/repo` sources |
+| **Network** | `dsh.a2hmarket.ai`; also `github.com` for GitHub-source skins | An unreachable registry falls back to the cache or bundled snapshot, and the page says so |
+| **Browser** | Installing requires a **direct local connection** (loopback) | Remote access can browse and search; installing is refused |
 
-插件自身只有一个运行时依赖：[`yaml`](https://www.npmjs.com/package/yaml)，用来读写 profile 的 patch 文件。
+The plugin itself has a single runtime dependency: [`yaml`](https://www.npmjs.com/package/yaml), used to read and write the profile's patch file.
 
-## 配置
+## Configuration
 
-插件默认不需要配置。要改的话，在 profile 的 `cordis.patch.yml`（`$DSH_HOME/profiles/web/cordis.patch.yml`）里追加一段，按 id 覆盖本插件那一行：
+No configuration is needed by default. To change something, append a section to the profile's `cordis.patch.yml` (`$DSH_HOME/profiles/web/cordis.patch.yml`) overriding this plugin's row by id:
 
 ```yaml
 - id: skin-market
   name: dsh-skin-market
   config:
-    # 换一个集市（自建目录服务时用）。注意要带 context-path。
+    # Point at a different registry (for a self-hosted catalog). Include the context path.
     catalogOrigin: https://dsh.a2hmarket.ai/dsh-skin
-    # 关掉后市场只读：能逛能搜，安装按钮不再动你的机器。
+    # Turn this off for a read-only market: browsing and search work, and the install
+    # button no longer touches your machine.
     allowInstall: true
 ```
 
-## 开发
+## Development
 
 ```sh
 pnpm install
-pnpm build     # → lib/index.js（host 半）+ lib/client.js（浏览器半）
-pnpm check     # 类型检查
-pnpm test      # 单元测试
+pnpm build     # → lib/index.js (host half) + lib/client.js (browser half)
+pnpm check     # type check
+pnpm test      # unit tests
 ```
 
-改完代码重新 `pnpm build`，然后重启 dsh。插件以 `link:` 装进 profile 时不必重新 `add`。
+After changing code, run `pnpm build` again and restart dsh. When the plugin is installed into a profile with `link:`, there is no need to `add` it again.
 
-**`lib/` 是故意提交进仓库的**：用户从 git 源安装时 pnpm 默认不执行构建脚本，不带产物的包会因缺入口文件让 dsh 起不来。所以改完代码要把 `pnpm build` 的产物一并提交。
+**`lib/` is committed on purpose**: pnpm does not run build scripts for git sources by default, so a package without build output is missing its entry file and stops dsh from starting. Commit the `pnpm build` output along with your code changes.
 
-### 两半
+### The two halves
 
-| | 文件 | 职责 |
+| | File | Responsibility |
 |---|---|---|
-| host | `src/index.ts` | 在 `ctx.webServer` 上挂 `/skin-market/api/*`：目录代理与缓存、已装清单、安装/卸载（SSE 回流 pnpm 输出）、诊断 |
-| client | `src/client/index.ts` | 注册 `settings.section`，画列表、搜索、安装交互 |
+| host | `src/index.ts` | Mounts `/skin-market/api/*` on `ctx.webServer`: catalog proxy and cache, installed list, install/uninstall (streaming pnpm output over SSE), diagnostics |
+| client | `src/client/index.ts` | Registers `settings.section`, renders the list, search and install interactions |
 
-两半之间走**同源 HTTP**，不走 `ctx.remote` —— remote 的能力集在 `api-remotes` 构建期就固定了，第三方插件加不进去。
+The two halves talk over **same-origin HTTP** rather than `ctx.remote` — the remote capability set is fixed at `api-remotes` build time and third-party plugins cannot add to it.
 
-`lib/client.js` 是闭包工厂形态的 CJS（`window.__ModuleLoader__.load({ id, factory })`），React 等外部依赖由宿主注入的 `require` 从模块表取，不打进包里。这个形状由 dsh 的模块表规定，`tsdown.config.ts` 复刻了它。
+`lib/client.js` is CJS in closure-factory form (`window.__ModuleLoader__.load({ id, factory })`); external dependencies such as React come from the host-injected `require` via the module table and are not bundled. That shape is dictated by dsh's module table, and `tsdown.config.ts` reproduces it.
 
-### harness 的类型
+### Harness types
 
-`types/dsh.d.ts` 自带了用到的那部分 harness API 声明，照 0.1.0-rc.7 的源码抄写，每处标了出处 —— 这些模块运行时全是 external，而 npm 上的 `@deepseek-ai/dsh-client-*` 依赖链目前不完整装不下来。宿主行为与声明对不上时，先回那个文件核对。
+`types/dsh.d.ts` vendors the parts of the harness API we use, transcribed from the 0.1.0-rc.7 source with the origin noted at each site — these modules are all external at runtime, and the `@deepseek-ai/dsh-client-*` dependency chain on npm is currently incomplete and cannot be installed. When host behaviour disagrees with the declarations, check that file first.
 
-## 相关
+## Related
 
 | | |
 |---|---|
-| [dsh.a2hmarket.ai](https://dsh.a2hmarket.ai) | 皮肤目录站，作者在这里上架。本插件的目录就是从这里拉的 |
-| [dsh-skin-pack](https://github.com/keman-ai/dsh-skin-pack) | 官方皮肤的源码，一个仓库全在里面 |
+| [dsh.a2hmarket.ai](https://dsh.a2hmarket.ai) | The skin catalog site where authors publish. This plugin's catalog is fetched from it |
+| [dsh-skin-pack](https://github.com/keman-ai/dsh-skin-pack) | The source of the official skins, all in one repository |
 
 <p align="center">
-  <img src="market.png" alt="DSH 皮肤集市：社区皮肤一览，看效果、读说明、复制一行命令装上" width="100%">
+  <img src="market.png" alt="DSH skin market: browse community skins, see them in action, read the notes, copy one line to install" width="100%">
 </p>
 
-## Star 趋势
+## Star history
 
 [![Star History Chart](https://api.star-history.com/svg?repos=keman-ai/dsh-skin-market&type=Date)](https://star-history.com/#keman-ai/dsh-skin-market&Date)
 
-## 许可
+## License
 
 [MIT](LICENSE) © 2026 Science Roam Limited
 
 ---
 
 <p align="center">
-  <sub>如果喜欢就给个 Star 鼓励我们一下吧</sub>
+  <sub>If this is useful to you, a Star goes a long way</sub>
 </p>

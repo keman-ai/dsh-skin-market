@@ -1,14 +1,17 @@
 /**
- * profile 目录的读写：定位、已装清单、用户 patch 层的增删。
+ * Reading and writing the profile directory: locating it, listing what is installed, and adding to or removing from the user patch layer.
  *
- * 为什么写 profile 的 `cordis.patch.yml`（用户层）而不是 `dsh.profile.bundles`
- * （`dsh plugin` CLI 用的那份）：用户层被 app-boot 的 watchUserPatches 持续监视，
- * 写完约 1 秒内 Loader 树事务式热重组，新插件的 host 半直接挂上，不用重启进程。
- * bundles 不在监视范围内，改它就得重启。
+ * Why write the profile's `cordis.patch.yml` (the user layer) rather than
+ * `dsh.profile.bundles` (what the `dsh plugin` CLI uses): app-boot's watchUserPatches
+ * watches the user layer continuously, so within about a second the Loader tree
+ * transactionally recomposes and the new plugin's host half mounts — no process restart.
+ * bundles is not watched, and changing it requires one.
  *
- * 关键约束：**不自己拼插件行**。皮肤包在 `dsh.bundle.patch` 里声明了自己那一层，
- * 形状由作者决定（可能是 `insert` 新行，也可能是按 id 覆盖既有行的 config）。
- * 我们把那个文件的条目原样内联进用户层，只额外挂一条注释标记归属，用于卸载时精确摘除。
+ * Key constraint: **never compose the plugin row ourselves.** A skin package declares its
+ * own layer in `dsh.bundle.patch`, and its shape is the author's choice (an `insert` of new
+ * rows, or a config override of an existing row by id). We inline that file's entries into
+ * the user layer verbatim, adding only an ownership comment so uninstall can remove exactly
+ * those rows.
  */
 
 import { readFile, writeFile, access } from 'node:fs/promises'
@@ -19,16 +22,16 @@ import { fileURLToPath } from 'node:url'
 import { parseDocument, YAMLSeq, type Document } from 'yaml'
 import type { InstalledSkin } from './types.ts'
 
-/** 内联条目的归属标记，写在每个顶层条目的前置注释里。 */
+/** Ownership marker for inlined entries, written as a leading comment on each top-level entry. */
 export const OWNER_TAG = 'skin-market:'
 
-/** 某个包的标记文本。 */
+/** Marker text for a given package. */
 const tagOf = (packageName: string): string => `${OWNER_TAG}${packageName}`
 
 /**
- * 把 ctx.baseUrl 解成本地目录。它可能是 file:// URL，也可能已经是路径。
- * @param baseUrl - 配置树锚点。
- * @returns profile 目录绝对路径；解不出来时 undefined。
+ * Resolve ctx.baseUrl to a local directory. It may be a file:// URL or already a path.
+ * @param baseUrl - The config-tree anchor.
+ * @returns Absolute profile directory, or undefined when it cannot be resolved.
  */
 export function profileDirOf(baseUrl: string | undefined): string | undefined {
   if (baseUrl === undefined || baseUrl === '') return undefined
@@ -39,7 +42,7 @@ export function profileDirOf(baseUrl: string | undefined): string | undefined {
   }
 }
 
-/** 目录可写吗 —— 装之前先问，别装到一半才失败。 */
+/** Is the directory writable? Ask before installing, not halfway through. */
 export async function isWritable(dir: string): Promise<boolean> {
   try {
     await access(dir, constants.W_OK)
@@ -49,7 +52,7 @@ export async function isWritable(dir: string): Promise<boolean> {
   }
 }
 
-/** 读 profile 的 patch 文件；不存在时给一份空文档。 */
+/** Read the profile's patch file, returning an empty document when absent. */
 async function loadPatch(profileDir: string): Promise<{ file: string; doc: Document }> {
   const file = join(profileDir, 'cordis.patch.yml')
   let text = ''
@@ -58,22 +61,23 @@ async function loadPatch(profileDir: string): Promise<{ file: string; doc: Docum
   } catch {
     text = ''
   }
-  // parseDocument 保留注释与原有格式：这是用户自己的配置文件，我们只是往里加行。
+  // parseDocument preserves comments and formatting: this is the user's own config file and we merely add rows.
   const doc = parseDocument(text === '' ? '[]' : text)
-  // patch 文件按约定是条目数组。不是的话说明这份配置我们看不懂 —— 报错，
-  // 而不是拿一个空数组把用户的文件覆盖掉。
+  // By convention the patch file is an array of entries. If it is not, we do not understand
+  // this config — raise an error rather than overwriting the user's file with an empty array.
   if (!(doc.contents instanceof YAMLSeq)) {
-    throw new Error(`${file} 不是 patch 条目数组，为避免覆盖你的配置，市场不动它`)
+    throw new Error(`${file} is not an array of patch entries; the market leaves it alone rather than overwrite your config`)
   }
-  // 从 '[]' 解析出来的序列是 flow 风格，往里加行会写成挤作一行的 `[ {...} ]`。
-  // 这是用户要读要改的配置文件，新建时也得是正常的块状 YAML。
+  // A sequence parsed from '[]' is flow style, so added rows would be crammed onto one line
+  // as `[ {...} ]`. This is a config file people read and edit, so a fresh one must be
+  // ordinary block YAML.
   if (text === '') doc.contents.flow = false
   return { file, doc }
 }
 
 /**
- * 顶层条目上的归属标记（我们写进去的那条注释）。
- * 标记后面可能跟着补充说明，所以只取第一个词。
+ * The ownership marker on a top-level entry — the comment we wrote.
+ * Extra explanation may follow it, so take only the first word.
  */
 function ownerOf(item: unknown): string | undefined {
   const comment = (item as { commentBefore?: string | null } | null)?.commentBefore
@@ -88,23 +92,24 @@ function ownerOf(item: unknown): string | undefined {
 }
 
 /**
- * 修正后那一行的 id：由我们命名，不沿用作者那个从没生效过的 id。
- * 用完整包名保证唯一（两个 scope 下的同名包不会撞），同包多行时追加序号。
- * @param packageName - 提供这行的包。
- * @param ordinal - 该包第几个被修正的行，从 0 起。
- * @returns 统一格式的行 id。
+ * The id of a repaired row: named by us, not the author's id that never took effect.
+ * The full package name guarantees uniqueness (same-named packages under two scopes cannot
+ * collide), with an ordinal appended when one package contributes several rows.
+ * @param packageName - The package providing this row.
+ * @param ordinal - Which repaired row of that package this is, from 0.
+ * @returns A row id in the uniform format.
  */
 const repairedIdOf = (packageName: string, ordinal: number): string => (
   ordinal === 0 ? `skin:${packageName}` : `skin:${packageName}#${ordinal + 1}`
 )
 
 /**
- * 读一个已安装包声明的 bundle patch 文件。
- * @param profileDir - profile 目录。
- * @param packageName - 包名（必须是真实包名，不是从 spec 猜的）。
- * @param packageDir - 包的实际目录；调用方能从 pnpm 问到时一定要传。
- * @returns 解析后的 patch 文档。
- * @throws 包不存在、没声明 dsh.bundle、或 patch 文件读不出来。
+ * Read the bundle patch file an installed package declares.
+ * @param profileDir - The profile directory.
+ * @param packageName - The package name (must be the real one, never guessed from the spec).
+ * @param packageDir - The package's actual directory; always pass it when pnpm can tell you.
+ * @returns The parsed patch document.
+ * @throws When the package is missing, declares no dsh.bundle, or the patch file is unreadable.
  */
 async function loadBundlePatch(
   profileDir: string, packageName: string, packageDir?: string,
@@ -117,53 +122,56 @@ async function loadBundlePatch(
   try {
     raw = await readFile(manifestPath, 'utf8')
   } catch {
-    // 仓库根没有 package.json —— 多半是一个把每个皮肤放在子目录里的多皮肤仓库。
+    // No package.json at the repo root — most likely a multi-skin repo keeping each skin in a subdirectory.
     throw new Error(
-      `${packageName} 装出来的目录里没有 package.json。`
-      + '这个皮肤多半放在仓库的子目录里，而 pnpm 不支持从 git 仓库的子目录安装'
-      + '（`#` 后面只能跟分支或提交）。请按作者在集市页上给的说明手动安装。',
+      `${packageName} installed into a directory with no package.json. `
+      + 'This skin most likely lives in a subdirectory of its repository, and pnpm cannot '
+      + 'install from a subdirectory of a git repo (only a branch or commit may follow `#`). '
+      + "Please install it manually, following the author's instructions on the market page.",
     )
   }
   const manifest = JSON.parse(raw) as { dsh?: { bundle?: { patch?: string } } }
   const relative = manifest.dsh?.bundle?.patch
   if (relative === undefined) {
     throw new Error(
-      `${packageName} 没有声明 dsh.bundle.patch —— 它是一个普通依赖，不是能挂载的皮肤组合包`,
+      `${packageName} declares no dsh.bundle.patch — it is a plain dependency, not a mountable skin bundle`,
     )
   }
 
   const patchPath = resolve(dirname(manifestPath), relative)
   const doc = parseDocument(await readFile(patchPath, 'utf8'))
   if (!(doc.contents instanceof YAMLSeq)) {
-    throw new Error(`${packageName} 的 ${relative} 不是 patch 条目数组`)
+    throw new Error(`${relative} in ${packageName} is not an array of patch entries`)
   }
   return doc
 }
 
 /**
- * 没有 pnpm 给的路径时，退回自己找 manifest。
+ * Without a path from pnpm, fall back to finding the manifest ourselves.
  *
- * 直接拼 `node_modules/<包名>` 并不可靠：pnpm 的 isolated 布局把实体放在
- * `.pnpm/<hash>/node_modules/<包名>`，顶层只是一个符号链接，而这个链接的
- * 建立时机没有保证 —— 装完立刻去读会 ENOENT。所以先走 Node 的解析算法。
- * @param profileDir - profile 目录。
- * @param packageName - 包名。
- * @returns package.json 的路径（可能不存在，由调用方的读操作报错）。
+ * Joining `node_modules/<name>` is unreliable: pnpm's isolated layout keeps the real files
+ * in `.pnpm/<hash>/node_modules/<name>` with only a symlink at the top level, and nothing
+ * guarantees when that link appears — reading right after install can ENOENT. So try Node's
+ * resolution algorithm first.
+ * @param profileDir - The profile directory.
+ * @param packageName - The package name.
+ * @returns The package.json path (which may not exist; the caller's read reports that).
  */
 function resolveManifest(profileDir: string, packageName: string): string {
   const require = createRequire(join(profileDir, 'noop.js'))
   try {
     return require.resolve(`${packageName}/package.json`)
   } catch {
-    // exports 不暴露 package.json 的包会走到这里。
+    // Packages whose exports do not expose package.json land here.
     return join(profileDir, 'node_modules', packageName, 'package.json')
   }
 }
 
 /**
- * 列出市场装过的皮肤。数据来自本机 profile，不碰网络 —— 断网也能管。
- * @param profileDir - profile 目录。
- * @returns 已装皮肤，按包名排序。
+ * List the skins the market installed. The data comes from the local profile and touches no
+ * network, so this works offline.
+ * @param profileDir - The profile directory.
+ * @returns Installed skins, sorted by package name.
  */
 export async function listInstalled(profileDir: string): Promise<InstalledSkin[]> {
   const { doc } = await loadPatch(profileDir)
@@ -175,7 +183,7 @@ export async function listInstalled(profileDir: string): Promise<InstalledSkin[]
     if (owner === undefined) continue
     const previous = seen.get(owner) ?? { rows: 0, disabled: true }
     const disabled = (item as { get?: (key: string) => unknown }).get?.('disabled') === true
-    // 一个包可能贡献多行；只要有一行是启用的，这个皮肤就算启用。
+    // One package may contribute several rows; the skin counts as enabled if any row is.
     seen.set(owner, { rows: previous.rows + 1, disabled: previous.disabled && disabled })
   }
 
@@ -193,7 +201,7 @@ export async function listInstalled(profileDir: string): Promise<InstalledSkin[]
   return out.sort((a, b) => a.packageName.localeCompare(b.packageName))
 }
 
-/** profile package.json 的 dependencies。 */
+/** The profile package.json's dependencies. */
 export async function readDependencies(profileDir: string): Promise<Record<string, string>> {
   try {
     const raw = await readFile(join(profileDir, 'package.json'), 'utf8')
@@ -205,14 +213,15 @@ export async function readDependencies(profileDir: string): Promise<Record<strin
 }
 
 /**
- * 在 profile 的依赖里按安装 spec 反查包名。
+ * Look up a package name in the profile's dependencies by install spec.
  *
- * 用于两种「依赖已经在了」的局面：重复安装，以及卸载时 `pnpm remove` 失败留下的
- * 残留（patch 行已摘、依赖还在）。pnpm 有时会把 git spec 规范化并缀上 commit，
- * 所以精确比不中时再按 `#` 之前的部分比一次。
- * @param profileDir - profile 目录。
- * @param spec - 目录给出的安装 spec。
- * @returns 匹配到的包名；没有则 undefined。
+ * For the two "the dependency is already there" cases: a repeat install, and the residue of
+ * a failed `pnpm remove` during uninstall (patch row gone, dependency still present). pnpm
+ * sometimes normalises a git spec and appends a commit, so when an exact match fails,
+ * compare again on the part before `#`.
+ * @param profileDir - The profile directory.
+ * @param spec - The install spec from the catalog.
+ * @returns The matching package name, or undefined.
  */
 export async function findBySpec(profileDir: string, spec: string): Promise<string | undefined> {
   const deps = Object.entries(await readDependencies(profileDir))
@@ -222,7 +231,7 @@ export async function findBySpec(profileDir: string, spec: string): Promise<stri
   return deps.find(([, value]) => value.split('#')[0] === bare)?.[0]
 }
 
-/** 已装包的实际版本。读不到就不给，不猜。 */
+/** The installed package's actual version. If unreadable, omit it rather than guess. */
 async function readVersion(profileDir: string, packageName: string): Promise<{ version?: string }> {
   try {
     const raw = await readFile(join(profileDir, 'node_modules', packageName, 'package.json'), 'utf8')
@@ -234,20 +243,22 @@ async function readVersion(profileDir: string, packageName: string): Promise<{ v
 }
 
 /**
- * 解析某个已装皮肤的预览图绝对路径。
+ * Resolve the absolute path of an installed skin's preview image.
  *
- * 🔴 路径来自包自己的 skin.json，但<b>必须验证解析结果仍在包目录内</b> ——
- * 那个字段是包作者写的，`../../..` 之类的值会让这个路由变成任意文件读取。
- * 校验用 resolve 后的前缀比对，不是字符串里找 `..`（`%2e%2e` 那类编码绕得过去）。
+ * 🔴 The path comes from the package's own skin.json, but <b>the resolved result must be
+ * verified to stay inside the package directory</b> — that field is written by the package
+ * author, and a value like `../../..` would turn this route into arbitrary file read.
+ * Validation compares prefixes after resolve, not by searching for `..` in the string
+ * (encodings such as `%2e%2e` slip past that).
  *
- * @param profileDir - profile 目录。
- * @param packageName - 包名，调用方必须先确认它在已装列表里。
- * @returns 预览图绝对路径；没有或越界时 undefined。
+ * @param profileDir - The profile directory.
+ * @param packageName - The package name; the caller must first confirm it is installed.
+ * @returns The absolute preview path, or undefined when absent or out of bounds.
  */
 export async function resolveIconPath(
   profileDir: string, packageName: string,
 ): Promise<string | undefined> {
-  // 包名只允许 npm 的合法形态，挡掉 ../ 这类拼进目录的写法
+  // Only npm-legal package names, blocking `../`-style path injection
   if (!/^(?:@[\w.-]+\/)?[\w.-]+$/.test(packageName)) return undefined
   const packageDir = join(profileDir, 'node_modules', packageName)
   try {
@@ -257,30 +268,31 @@ export async function resolveIconPath(
     const candidates = Object.values(skin.preview ?? {}).filter(v => typeof v === 'string')
     for (const relative of candidates) {
       const full = resolve(packageDir, relative)
-      // 必须仍在包目录内：作者写 ../../ 也不能读到别处
+      // Must remain inside the package directory: an author writing ../../ still cannot read elsewhere
       if (!full.startsWith(resolve(packageDir) + '/')) continue
       try {
         await access(full, constants.R_OK)
         return full
       } catch {
-        // 声明了但文件不在，试下一个
+        // Declared but missing — try the next one
       }
     }
   } catch {
-    // 没有 skin.json 或读不出来 —— 没有图标而已
+    // No skin.json, or unreadable — it simply has no icon
   }
   return undefined
 }
 
 /**
- * 从包里的 skin.json 读它注册的主题 id。
+ * Read the theme id a package registers from its skin.json.
  *
- * 皮肤的三处 id（skin.json#id、THEME_ID、patch 的 insert.id）按约定必须一致，
- * 所以读 skin.json 就够。没有这个文件的包（不是按规范做的皮肤）返回空，
- * 界面据此不显示启用按钮 —— 而不是猜一个 id 去 setTheme，切不过去还查不出原因。
- * @param profileDir - profile 目录。
- * @param packageName - 包名。
- * @returns 主题 id；读不到时空对象。
+ * A skin's three ids (skin.json#id, THEME_ID, and the patch's insert.id) must agree by
+ * convention, so reading skin.json is enough. A package without that file — not a skin built
+ * to spec — returns nothing, and the UI simply shows no enable button, rather than guessing
+ * an id for setTheme that fails to switch with no diagnosable reason.
+ * @param profileDir - The profile directory.
+ * @param packageName - The package name.
+ * @returns The theme id, or an empty object when unreadable.
  */
 async function readThemeId(profileDir: string, packageName: string): Promise<{ themeId?: string }> {
   try {
@@ -293,14 +305,15 @@ async function readThemeId(profileDir: string, packageName: string): Promise<{ t
 }
 
 /**
- * 把一个已安装皮肤包声明的 patch 层内联进用户层。
+ * Inline the patch layer an installed skin package declares into the user layer.
  *
- * 逐条原样搬运，只给每条挂一个归属注释 —— 作者写的是 `insert` 还是按 id 覆盖，
- * 语义都保持不变。已经搬过就不重复搬（幂等）。
- * @param profileDir - profile 目录。
- * @param packageName - 真实包名（从安装结果读出来的，不是猜的）。
- * @param packageDir - 包的实际目录；调用方能从 pnpm 问到时一定要传。
- * @returns 搬进去的条目数与其中被修正的行数；已经在了返回 rows: 0。
+ * Entries are carried over verbatim, with only an ownership comment attached — whether the
+ * author wrote an `insert` or an override by id, the semantics are preserved. Idempotent:
+ * already-carried entries are not carried again.
+ * @param profileDir - The profile directory.
+ * @param packageName - The real package name, read from the install result rather than guessed.
+ * @param packageDir - The package's actual directory; always pass it when pnpm can tell you.
+ * @returns How many entries were carried and how many of them were repaired; rows: 0 when already present.
  */
 export async function applyBundlePatch(
   profileDir: string, packageName: string, packageDir?: string,
@@ -312,15 +325,15 @@ export async function applyBundlePatch(
   const bundle = await loadBundlePatch(profileDir, packageName, packageDir)
   const rows = (bundle.contents as YAMLSeq).items
   if (rows.length === 0) {
-    throw new Error(`${packageName} 的 bundle patch 是空的，没有可挂载的插件行`)
+    throw new Error(`${packageName}'s bundle patch is empty — there is no plugin row to mount`)
   }
 
   let repaired = 0
   for (const row of rows) {
-    // 经 JSON 往返落到本文档上：跨文档直接塞节点会带着原文档的锚点与格式状态。
+    // Round-trip through JSON onto this document: inserting a node across documents drags along the source document's anchors and formatting state.
     const plain = JSON.parse(JSON.stringify(row)) as Record<string, unknown>
     const fixed = repairSelfMount(plain, packageName, repaired)
-    const note = fixed === plain ? '' : ` （已修正，原 id: ${String(plain.id)}）`
+    const note = fixed === plain ? '' : ` (repaired, original id: ${String(plain.id)})`
     if (fixed !== plain) repaired += 1
 
     const node = doc.createNode(fixed) as { commentBefore?: string | null }
@@ -333,23 +346,26 @@ export async function applyBundlePatch(
 }
 
 /**
- * 接住一种常见的 bundle patch 笔误：把「挂载我自己」写成了「改一行」。
+ * Catch a common bundle-patch mistake: writing "mount myself" as "edit a row".
  *
- * patch 的语义是：`{insert: [...]}` 追加新行，而 `{id, ...}` 是**按 id 覆盖已有行**，
- * 找不到那个 id 就只 warn 一句然后跳过（vendor/include 的 applyEntryPatches）。
- * 于是 `- id: ui-skin-xxx / name: '<自己的包名>'` 这种写法在任何层里都是空操作 ——
- * 包括走官方 `dsh.profile.bundles` 时，装了也静默不生效。社区里已经有皮肤这么写。
+ * The patch semantics are: `{insert: [...]}` appends new rows, while `{id, ...}` **overrides
+ * an existing row by id**, and a missing id only warns and skips (applyEntryPatches in
+ * vendor/include). So `- id: ui-skin-xxx / name: '<its own package name>'` is a no-op in any
+ * layer — including the official `dsh.profile.bundles` route, where it installs and silently
+ * does nothing. Skins in the wild are written this way.
  *
- * 判据收得很紧，只认「它显然是想挂载自己」这一种：没有 insert、有 id、且 name
- * 正是这个包自己。真正的覆盖型 patch（name 指向别的包，或压根不写 name）不受影响。
+ * The test is deliberately narrow, matching only the obvious "it meant to mount itself" case:
+ * no insert, an id present, and a name that is this very package. Genuine override patches
+ * (name pointing at another package, or no name at all) are untouched.
  *
- * 修正时顺手把行 id 换成我们统一命名的那个：作者原来的 id 从没在树里生效过，
- * 也就不可能有别的行按它引用，换掉是安全的，换来的是 profile 里一眼能认出
- * 哪些行是市场装的。作者写对的行则连 id 都不碰 —— 同包多行之间可能靠 id 互相引用。
- * @param row - bundle patch 里的一行。
- * @param packageName - 提供这行的包。
- * @param ordinal - 该包此前已修正过几行。
- * @returns 需要修正时返回改名并包装后的行，否则原样返回入参。
+ * While repairing, the row id is also switched to our uniform naming: the author's id never
+ * took effect in the tree, so no other row can reference it, making the change safe — and it
+ * buys instant recognition of which rows the market installed. Rows the author wrote
+ * correctly keep even their id, since several rows of one package may reference each other by id.
+ * @param row - One row from the bundle patch.
+ * @param packageName - The package providing this row.
+ * @param ordinal - How many rows of that package have already been repaired.
+ * @returns The renamed and wrapped row when repair is needed, otherwise the input unchanged.
  */
 function repairSelfMount(
   row: Record<string, unknown>, packageName: string, ordinal: number,
@@ -360,10 +376,11 @@ function repairSelfMount(
 }
 
 /**
- * 摘掉某个包内联进来的所有条目。只认归属注释，用户自己写的行一律不碰。
- * @param profileDir - profile 目录。
- * @param packageName - 包名。
- * @returns 是否真的删掉了。
+ * Remove every entry a package inlined. Only ownership comments count; rows the user wrote
+ * are never touched.
+ * @param profileDir - The profile directory.
+ * @param packageName - The package name.
+ * @returns Whether anything was actually removed.
  */
 export async function removeRow(profileDir: string, packageName: string): Promise<boolean> {
   const { file, doc } = await loadPatch(profileDir)
