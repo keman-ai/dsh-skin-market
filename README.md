@@ -151,10 +151,6 @@ The two halves talk over **same-origin HTTP** rather than `ctx.remote` — the r
   <img src="market.png" alt="DSH skin market: browse community skins, see them in action, read the notes, copy one line to install" width="100%">
 </p>
 
-## Star history
-
-[![Star History Chart](https://api.star-history.com/svg?repos=keman-ai/dsh-skin-market&type=Date)](https://star-history.com/#keman-ai/dsh-skin-market&Date)
-
 ## License
 
 [MIT](LICENSE) © 2026 Science Roam Limited
