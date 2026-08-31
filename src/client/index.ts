@@ -25,7 +25,7 @@ export type { CardState } from './card-state.ts'
 export const NS = 'settings.skinMarket'
 
 /** Plugin version, shown in the page header. Bump it together with package.json. */
-const VERSION = '0.1.0'
+const VERSION = '0.1.1'
 
 /** Browser-side services required. */
 export const inject = ['slots', 'locale']
