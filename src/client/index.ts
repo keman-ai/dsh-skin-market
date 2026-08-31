@@ -40,23 +40,46 @@ export function apply(ctx: ClientContext): void {
   const t = ctx.locale.bind(NS)
   const api = createApi()
 
-  // ui-theme ships with the web bundle but is not a hard dependency: without it the
-  // market still browses and installs, it just cannot offer the "apply skin" step.
-  const theme = ctx.get<ThemeRuntime>('theme')
-  if (theme !== undefined) {
+  /**
+   * The theme service, filled once ui-theme is ready.
+   *
+   * 🔴 **Not `ctx.get('theme')` at apply time.** ui-theme ships with the web bundle but this plugin does not
+   * declare it in `inject`, so at apply time the service may not be ready — and `get` then hands back a handle
+   * that reads fine yet drives nothing: `getTheme()` returns the built-ins, so the appearance row renders and the
+   * enable buttons appear, while `setTheme` throws `theme "…" is not registered` because every skin registered on
+   * the live instance. Measured on dsh 0.1.2-alpha.2: clicking Enable did nothing at all, and switching to the
+   * built-in `dark` through this same handle failed too — which is what proved the handle, not the skins, was the
+   * broken part.
+   *
+   * `ctx.inject` keeps ui-theme optional (a bundle without it simply never runs this callback, and the market
+   * still browses and installs) while guaranteeing the instance is the ready, current one.
+   */
+  let theme: ThemeRuntime | undefined
+  ctx.inject(['theme'], (ready) => {
+    theme = ready.get<ThemeRuntime>('theme')
+    if (theme === undefined) return
+    const runtime = theme
     // Third-party theme ids never reach Host settings, so we restore the last choice after a restart.
-    ctx.effect(() => restoreSaved(ctx, theme), 'skin-market: restore selected skin')
-  }
-
-  const appearance = theme === undefined ? undefined : {
-    options: () => optionsOf(theme.getTheme()),
-    subscribe: (listener: () => void) => ctx.on('theme/change', listener),
-    select: (id: string) => { selectTheme(theme, id) },
-  }
-
-  const injected = (): SkinMarketInjected => ({
-    api, t, version: VERSION, ...(appearance === undefined ? {} : { appearance }),
+    ctx.effect(() => restoreSaved(ctx, runtime), 'skin-market: restore selected skin')
   })
+
+  /*
+   * Read `theme` at call time, never captured.
+   *
+   * `injected` is a factory the slot calls when the panel renders, which is after the user opens Settings — long
+   * after ui-theme is ready. Capturing the value here instead would freeze whatever was true at apply time, the
+   * very bug described above.
+   */
+  const appearance = {
+    options: () => (theme === undefined ? [] : optionsOf(theme.getTheme())),
+    subscribe: (listener: () => void) => ctx.on('theme/change', listener),
+    select: (id: string) => {
+      if (theme === undefined) throw new Error('theme service is not available in this bundle')
+      selectTheme(theme, id)
+    },
+  }
+
+  const injected = (): SkinMarketInjected => ({ api, t, version: VERSION, appearance })
 
   // slots.inject follows the slot's late declaration and re-declaration, so the settings shell need not be imported.
   ctx.slots.inject('settings.section', () => ctx.slots.register({

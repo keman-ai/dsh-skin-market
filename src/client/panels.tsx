@@ -71,6 +71,8 @@ export interface InstalledPanelProps {
   readonly activeThemeId?: string
   /** Enable a skin. Themes are single-select, so switching to one replaces the other. */
   readonly onEnable: (themeId: string) => void
+  /** Why the last Enable click failed, shown above the list. Absent while nothing has failed. */
+  readonly failure?: string
 }
 
 /**
@@ -79,7 +81,7 @@ export interface InstalledPanelProps {
  * @returns The panel element.
  */
 export function InstalledPanel(
-  { items, states, t, onUninstall, activeThemeId, onEnable }: InstalledPanelProps,
+  { items, states, t, onUninstall, activeThemeId, onEnable, failure }: InstalledPanelProps,
 ): JSX.Element {
   if (items.length === 0) {
     return (
@@ -92,6 +94,12 @@ export function InstalledPanel(
 
   return (
     <div className={styles.installedList}>
+      {failure !== undefined && (
+        <div className={styles.empty}>
+          {t('installed.enableFailed')}
+          <div className={styles.emptyHint}>{failure}</div>
+        </div>
+      )}
       {items.map((item) => {
         const state = states.get(item.packageName) ?? { kind: 'idle' as const }
         const busy = state.kind === 'working'

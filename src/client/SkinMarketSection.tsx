@@ -54,6 +54,8 @@ export function SkinMarketSection({ api, t, version, appearance }: SkinMarketInj
   const [sort, setSort] = useState<string>('popular')
   const [page, setPage] = useState<CatalogPage | undefined>(undefined)
   const [failure, setFailure] = useState<string | undefined>(undefined)
+  /** Why the last Enable click did not switch the skin; cleared on the next attempt. */
+  const [enableFailure, setEnableFailure] = useState<string | undefined>(undefined)
   const [loading, setLoading] = useState(true)
   const [installed, setInstalled] = useState<readonly InstalledSkin[]>([])
   const [diagnostics, setDiagnostics] = useState<Diagnostics | undefined>(undefined)
@@ -274,7 +276,23 @@ export function SkinMarketSection({ api, t, version, appearance }: SkinMarketInj
             t={t}
             onUninstall={onUninstallName}
             {...(activeThemeId !== undefined ? { activeThemeId } : {})}
-            onEnable={(id) => { appearance?.select(id) }}
+            {...(enableFailure !== undefined ? { failure: enableFailure } : {})}
+            onEnable={(id) => {
+              /*
+               * 🔴 Report the failure; never swallow it.
+               *
+               * This used to be `appearance?.select(id)` — optional chaining with no catch. When the theme handle
+               * was the wrong instance, `setTheme` threw and the whole click became a silent no-op: the button
+               * gave no feedback, nothing switched, and nothing was logged. A skin that will not apply is exactly
+               * the case the user needs told about.
+               */
+              setEnableFailure(undefined)
+              try {
+                appearance?.select(id)
+              } catch (error) {
+                setEnableFailure(error instanceof Error ? error.message : String(error))
+              }
+            }}
           />
         </>
       )}
